@@ -1,0 +1,16 @@
+{
+ "rules": [
+  "attach_ellipsis",
+  "join_reduplication",
+  "fix_acronym_casing",
+  "fix_casing"
+ ],
+ "deltas": {
+  "attach_ellipsis": -0.012181870174435228,
+  "join_reduplication": -0.01086645696311124,
+  "fix_casing": -0.00983700314555333,
+  "fix_acronym_casing": -0.00017157563625964933,
+  "drop_bare_ellipsis": -0.0
+ },
+ "lexicon": "postprocess.lexicon.json"
+}

@@ -1,0 +1,17 @@
+__pycache__/
+*.py[cod]
+.ipynb_checkpoints/
+
+# Generated: hypotheses, adapters, merged weights, TensorBoard event files, tables.
+# run_manifest.json is generated too, but it is the provenance record for a result, so
+# commit it deliberately when citing that result.
+artifacts/
+submission/
+runtime/data/
+runtime/ground_truth.csv
+
+# Local corpora and credentials.
+indonesian_dev/
+jember/
+.env
+*.token

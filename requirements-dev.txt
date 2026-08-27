@@ -1,0 +1,10 @@
+# Local, CPU-only development: the notebook's analysis sections, the test suite and
+# packaging. The GPU work must use the competition runtime instead (see README), because
+# the container pins exact versions of torch / transformers / vllm / qwen-asr.
+jiwer>=3.0
+pandas>=2.0
+matplotlib>=3.8
+mutagen>=1.47          # MP3 durations from headers, without decoding
+jupyterlab>=4.0
+huggingface_hub>=0.26  # publish checkpoints / pull them back before packaging
+tensorboard>=2.16      # read the event files written during GPU training
