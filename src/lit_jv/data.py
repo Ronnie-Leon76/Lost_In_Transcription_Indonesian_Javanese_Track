@@ -84,6 +84,28 @@ def probe_duration(path: str | Path) -> float:
 # --------------------------------------------------------------------------
 
 
+def load_dotenv(path: str | Path | None = None) -> Path | None:
+    """Fill ``os.environ`` from a ``.env`` file without overwriting existing vars.
+
+    Already-exported values win, so a RunPod secret or a shell ``export`` still
+    overrides a file. Missing files are a no-op. Returns the path that was read,
+    or ``None``.
+    """
+    path = Path(path) if path is not None else Path(__file__).resolve().parents[2] / ".env"
+    if not path.is_file():
+        return None
+    for raw in path.read_text(encoding="utf-8").splitlines():
+        line = raw.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, _, value = line.partition("=")
+        key = key.strip()
+        if not key or key in os.environ:
+            continue
+        os.environ[key] = value.strip().strip('"').strip("'")
+    return path
+
+
 def resolve_dev_dir(explicit: str | Path | None = None) -> Path:
     """Locate the development set.
 
@@ -94,6 +116,7 @@ def resolve_dev_dir(explicit: str | Path | None = None) -> Path:
     """
     if explicit is not None:
         return Path(explicit)
+    load_dotenv()
     env = os.environ.get("LIT_DEV_DIR")
     if env:
         return Path(env)

@@ -72,6 +72,11 @@ rsync -avP indonesian_dev/ runpod:/workspace/Lost_In_Transcription_Indonesian_Ja
 export LIT_DEV_DIR=/workspace/data/indonesian_dev
 ```
 
+Copy [`.env.example`](.env.example) to `.env` and fill it in. Nothing is required if
+`indonesian_dev/` sits next to the repo and you are not publishing to the Hub.
+The notebook loads `.env` on the first cell; already-exported values win, so a
+RunPod secret still overrides the file.
+
 For the GPU work, match the competition runtime rather than installing loosely — the
 container pins `transformers==4.57.6`, `vllm==0.23.0`, `qwen-asr==0.0.6`,
 `torch==2.11.0+cu130`, `peft==0.20.0` on Python 3.12:

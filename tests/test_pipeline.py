@@ -41,6 +41,28 @@ def test_scorer_self_check():
     scoring.self_check()
 
 
+def test_load_dotenv_fills_missing_keys_only(tmp_path=None):
+    import os
+    import tempfile
+
+    with tempfile.TemporaryDirectory() as tmp:
+        path = Path(tmp) / ".env"
+        path.write_text(
+            "# comment\nLIT_DOTENV_PROBE=from-file\nLIT_DOTENV_KEEP=from-file\n",
+            encoding="utf-8",
+        )
+        os.environ.pop("LIT_DOTENV_PROBE", None)
+        os.environ["LIT_DOTENV_KEEP"] = "from-shell"
+        try:
+            assert data.load_dotenv(path) == path
+            assert os.environ["LIT_DOTENV_PROBE"] == "from-file"
+            assert os.environ["LIT_DOTENV_KEEP"] == "from-shell"
+            assert data.load_dotenv(Path(tmp) / "missing.env") is None
+        finally:
+            os.environ.pop("LIT_DOTENV_PROBE", None)
+            os.environ.pop("LIT_DOTENV_KEEP", None)
+
+
 def test_load_dev_manifest_explains_a_missing_folder():
     try:
         data.load_dev_manifest("/definitely/missing/lit-dev")
