@@ -66,6 +66,17 @@ on RunPod already has it. If a box still lacks `metadata.tsv`, either `git pull`
 rsync -avP indonesian_dev/ runpod:/workspace/Lost_In_Transcription_Indonesian_Javanese_Track/indonesian_dev/
 ```
 
+To publish checkpoints to the Hub, set `HF_TOKEN` and `LIT_HF_REPO` in `.env`, then:
+
+```bash
+source scripts/setup_env.sh
+python scripts/push_to_hub.py                  # adapters + logs + manifest
+python scripts/push_to_hub.py --upload-merged  # also the merged 1.7B weights
+```
+
+Training pushes adapters automatically when those two variables are set. The notebook
+cell §10.3 and the fusion cell do the same after a merge.
+
 Copy [`.env.example`](.env.example) to `.env` if you want Hub publishing or a non-default
 data path. Then on the GPU box:
 

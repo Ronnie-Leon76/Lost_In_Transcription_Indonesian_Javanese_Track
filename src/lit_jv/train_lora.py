@@ -68,6 +68,50 @@ HF_ASSET_FILES = (
 )
 
 
+def sanitize_generation_config(config):
+    """Make a GenerationConfig saveable under transformers 4.57+ strict checks.
+
+    Qwen3-ASR ships ``temperature=1e-06`` with ``do_sample=False`` — greedy
+    decoding written as "temperature almost zero". Newer transformers refuse to
+    serialise that combination. Inference here is greedy, so drop the sampling
+    knobs rather than turning sampling on.
+    """
+    if config is None:
+        return None
+    if not bool(getattr(config, "do_sample", False)):
+        for key in ("temperature", "top_p", "top_k", "typical_p", "epsilon_cutoff", "eta_cutoff"):
+            if hasattr(config, key):
+                setattr(config, key, None)
+    try:
+        config.validate(strict=True)
+    except (TypeError, ValueError):
+        config.do_sample = False
+        for key in ("temperature", "top_p", "top_k", "typical_p"):
+            if hasattr(config, key):
+                setattr(config, key, None)
+    return config
+
+
+def write_generation_config(directory: str | Path, config=None) -> Path:
+    """Write a greedy-decode ``generation_config.json`` that transformers will reload."""
+    directory = Path(directory)
+    directory.mkdir(parents=True, exist_ok=True)
+    path = directory / "generation_config.json"
+    payload = {
+        "do_sample": False,
+        "transformers_version": "4.57.6",
+    }
+    if config is not None:
+        for key in ("bos_token_id", "eos_token_id", "pad_token_id", "decoder_start_token_id"):
+            value = getattr(config, key, None)
+            if value is not None:
+                payload[key] = value
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(payload, f, indent=2)
+        f.write("\n")
+    return path
+
+
 # --------------------------------------------------------------------------
 # Configuration
 # --------------------------------------------------------------------------
@@ -442,7 +486,9 @@ def build_model(spec: TrainSpec, adapter_path: str | Path | None = None):
 
     from transformers import GenerationConfig
 
-    model.generation_config = GenerationConfig.from_model_config(model.config)
+    model.generation_config = sanitize_generation_config(
+        GenerationConfig.from_model_config(model.config)
+    )
 
     if adapter_path is not None:
         model = PeftModel.from_pretrained(model, str(adapter_path), is_trainable=True)
@@ -917,7 +963,7 @@ def train(
         ),
     }
 
-    if spec.hub is not None and spec.push_each_stage:
+    if spec.hub is not None:
         from . import hub as hub_module
 
         result["published"] = hub_module.publish_run(
@@ -1013,10 +1059,19 @@ def merge_and_save(
         model, str(adapter_dir), adapter_name=adapter_name or "default"
     )
     merged = peft_model.merge_and_unload()
+    sanitize_generation_config(getattr(merged, "generation_config", None))
 
     out_dir = Path(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
-    merged.save_pretrained(str(out_dir), safe_serialization=True)
+    try:
+        merged.save_pretrained(str(out_dir), safe_serialization=True)
+    except ValueError as exc:
+        if "GenerationConfig" not in str(exc):
+            raise
+        # Detach the invalid config, write weights, then drop a greedy one.
+        merged.generation_config = None
+        merged.save_pretrained(str(out_dir), safe_serialization=True)
+    write_generation_config(out_dir, getattr(merged, "generation_config", None))
     try:
         processor.save_pretrained(str(out_dir))
     except Exception:

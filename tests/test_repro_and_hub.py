@@ -132,6 +132,47 @@ def test_model_card_documents_the_run():
     assert "HF_TOKEN" not in card
 
 
+def test_sanitize_generation_config_unsets_greedy_temperature():
+    from types import SimpleNamespace
+
+    from lit_jv.train_lora import sanitize_generation_config, write_generation_config
+
+    class FakeConfig(SimpleNamespace):
+        def validate(self, strict=False):
+            if not self.do_sample and self.temperature not in (None, 1.0):
+                raise ValueError("temperature set with do_sample=False")
+
+    dirty = FakeConfig(do_sample=False, temperature=1e-06, top_p=0.8, top_k=20)
+    clean = sanitize_generation_config(dirty)
+    assert clean.do_sample is False
+    assert clean.temperature is None
+    clean.validate(strict=True)
+
+    with tempfile.TemporaryDirectory() as tmp:
+        path = write_generation_config(tmp, clean)
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    assert payload["do_sample"] is False
+    assert "temperature" not in payload
+
+
+def test_hub_spec_from_env_is_none_without_a_repo():
+    import os
+
+    old = os.environ.get("LIT_HF_REPO")
+    try:
+        os.environ.pop("LIT_HF_REPO", None)
+        assert hub.HubSpec.from_env() is None
+        os.environ["LIT_HF_REPO"] = "me/lit-jv"
+        spec = hub.HubSpec.from_env()
+        assert spec is not None and spec.repo_id == "me/lit-jv"
+        assert spec.upload_merged is False
+    finally:
+        if old is None:
+            os.environ.pop("LIT_HF_REPO", None)
+        else:
+            os.environ["LIT_HF_REPO"] = old
+
+
 def test_hub_spec_reads_token_from_the_environment_only():
     import os
 
