@@ -32,7 +32,7 @@ from lit_jv import data as lit_data  # noqa: E402
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--dev", type=Path, default=ROOT / "indonesian_dev")
+    parser.add_argument("--dev", type=Path, default=None)
     parser.add_argument("--out", type=Path, default=ROOT / "runtime" / "data")
     parser.add_argument(
         "--ground-truth",

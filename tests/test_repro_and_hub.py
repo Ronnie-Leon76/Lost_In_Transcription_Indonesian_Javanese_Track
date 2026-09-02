@@ -23,7 +23,19 @@ from lit_jv import hub, repro  # noqa: E402
 from lit_jv import data as lit_data  # noqa: E402
 from lit_jv.train_lora import LoraSpec, TrainSpec  # noqa: E402
 
-DEV_DIR = ROOT / "indonesian_dev"
+DEV_DIR = lit_data.resolve_dev_dir()
+
+
+class Skip(Exception):
+    """Optional local corpus is absent. Not a failure."""
+
+
+def _require_dev() -> None:
+    if not lit_data.dev_dir_ready(DEV_DIR):
+        raise Skip(
+            f"no development set at {DEV_DIR} "
+            "(copy indonesian_dev/ here, or set LIT_DEV_DIR)"
+        )
 
 
 def test_seeding_is_reproducible_across_processes():
@@ -52,6 +64,7 @@ def test_config_fingerprint_ignores_key_order_but_not_values():
 
 
 def test_manifest_fingerprint_tracks_content_not_order():
+    _require_dev()
     rows = lit_data.load_dev_manifest(DEV_DIR, with_durations=False)[:20]
     shuffled = list(rows)
     random.Random(0).shuffle(shuffled)
@@ -160,11 +173,22 @@ def test_train_spec_exposes_metrics_and_hub_controls():
 
 def run() -> int:
     tests = [(name, fn) for name, fn in sorted(globals().items()) if name.startswith("test_")]
+    failures = 0
     for name, fn in tests:
-        fn()
-        print(f"ok   {name}")
-    print(f"\n{len(tests)} tests passed")
-    return 0
+        try:
+            fn()
+        except Skip as exc:
+            print(f"skip {name}  ({exc})")
+        except Exception:
+            import traceback
+
+            failures += 1
+            print(f"FAIL {name}")
+            traceback.print_exc()
+        else:
+            print(f"ok   {name}")
+    print(f"\n{len(tests) - failures} tests passed" if not failures else f"\n{failures} failing test(s)")
+    return 1 if failures else 0
 
 
 if __name__ == "__main__":

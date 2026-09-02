@@ -27,6 +27,7 @@ from __future__ import annotations
 import csv
 import json
 import math
+import os
 import re
 from dataclasses import dataclass
 from pathlib import Path
@@ -83,8 +84,29 @@ def probe_duration(path: str | Path) -> float:
 # --------------------------------------------------------------------------
 
 
+def resolve_dev_dir(explicit: str | Path | None = None) -> Path:
+    """Locate the development set.
+
+    Order: an explicit path, then ``LIT_DEV_DIR``, then ``<repo>/indonesian_dev``.
+    The folder is gitignored (audio + transcripts), so a fresh clone on a rented
+    GPU box will not have it until it is copied there or the env var is pointed
+    at it.
+    """
+    if explicit is not None:
+        return Path(explicit)
+    env = os.environ.get("LIT_DEV_DIR")
+    if env:
+        return Path(env)
+    return Path(__file__).resolve().parents[2] / "indonesian_dev"
+
+
+def dev_dir_ready(dev_dir: str | Path | None = None, metadata_name: str = "metadata.tsv") -> bool:
+    """True when ``metadata.tsv`` is present. Clips can be probed later."""
+    return (resolve_dev_dir(dev_dir) / metadata_name).is_file()
+
+
 def load_dev_manifest(
-    dev_dir: str | Path,
+    dev_dir: str | Path | None = None,
     metadata_name: str = "metadata.tsv",
     clips_dirname: str = "clips",
     with_durations: bool = True,
@@ -95,10 +117,18 @@ def load_dev_manifest(
     flag flip in :func:`build_training_manifest` switches the whole pipeline
     between raw-text and scoring-space supervision.
     """
-    dev_dir = Path(dev_dir)
+    dev_dir = resolve_dev_dir(dev_dir)
+    metadata = dev_dir / metadata_name
+    if not metadata.is_file():
+        raise FileNotFoundError(
+            f"development set not found at {metadata}. "
+            "The folder is gitignored, so a git clone on RunPod does not include it. "
+            "Copy indonesian_dev/ onto this machine (rsync/scp), or set LIT_DEV_DIR "
+            "to the directory that contains metadata.tsv."
+        )
     clips = dev_dir / clips_dirname
     rows: list[dict] = []
-    with open(dev_dir / metadata_name, encoding="utf-8", newline="") as f:
+    with open(metadata, encoding="utf-8", newline="") as f:
         for rec in csv.DictReader(f, delimiter="\t"):
             audio = clips / rec["audio_filename"]
             rows.append(

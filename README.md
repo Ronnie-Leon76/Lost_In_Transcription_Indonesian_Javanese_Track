@@ -42,7 +42,7 @@ submission_src/        exactly what gets zipped: main.py + config + fitted rules
 scripts/               packaging and local-test helpers
 tests/                 CPU-only test suite, including a full container dry run
 notebooks/             the analysis
-indonesian_dev/        development set (not tracked)
+indonesian_dev/        development set (not tracked — copy it onto any new machine)
 artifacts/             generated: hypotheses, adapters, merged weights, ablation tables
 ```
 
@@ -57,6 +57,19 @@ python tests/test_pipeline.py
 python tests/test_repro_and_hub.py
 python tests/test_submission_dryrun.py
 python scripts/run_notebook_as_script.py     # executes every notebook code cell
+```
+
+`indonesian_dev/` is gitignored (audio + transcripts). A `git clone` on RunPod therefore
+does not include it, and tests that need real references skip rather than fail. To
+actually train or run the notebook there, copy the folder from the machine that already
+has it:
+
+```bash
+# from your local machine — the folder must contain metadata.tsv and clips/
+rsync -avP indonesian_dev/ runpod:/workspace/Lost_In_Transcription_Indonesian_Javanese_Track/indonesian_dev/
+
+# or, if it already lives somewhere else on the box
+export LIT_DEV_DIR=/workspace/data/indonesian_dev
 ```
 
 For the GPU work, match the competition runtime rather than installing loosely — the

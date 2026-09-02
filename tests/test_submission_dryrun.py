@@ -28,7 +28,7 @@ from lit_jv import decode as lit_decode  # noqa: E402
 from lit_jv import postprocess as lit_post  # noqa: E402
 from lit_jv import scoring  # noqa: E402
 
-DEV_DIR = ROOT / "indonesian_dev"
+DEV_DIR = lit_data.resolve_dev_dir()
 N_CLIPS = 12
 
 
@@ -195,6 +195,12 @@ def scenario(label: str, pipeline, config_override: dict | None = None) -> None:
 
 
 def run() -> int:
+    if not lit_data.dev_dir_ready(DEV_DIR):
+        print(
+            f"skip submission dry run: no development set at {DEV_DIR}\n"
+            "copy indonesian_dev/ onto this machine, or set LIT_DEV_DIR"
+        )
+        return 0
     all_rows = lit_data.load_dev_manifest(DEV_DIR, with_durations=False)
     lexicon = lit_post.StyleLexicon.fit(r["text"] for r in all_rows)
     pipeline = lit_post.RulePipeline(lexicon=lexicon)
