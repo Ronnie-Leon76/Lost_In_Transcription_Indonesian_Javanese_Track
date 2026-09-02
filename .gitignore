@@ -10,8 +10,9 @@ submission/
 runtime/data/
 runtime/ground_truth.csv
 
-# Local corpora and credentials.
-indonesian_dev/
+# Extra Javanese corpus (large, optional). The competition development set
+# indonesian_dev/ is tracked so a private-repo clone on RunPod has metadata.tsv
+# and clips/ without a separate rsync.
 jember/
 .env
 *.token

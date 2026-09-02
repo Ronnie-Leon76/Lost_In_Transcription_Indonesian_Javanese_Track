@@ -472,24 +472,43 @@ def build_model(spec: TrainSpec, adapter_path: str | Path | None = None):
 # --------------------------------------------------------------------------
 
 
-def _as_hf_dataset(rows: Sequence[dict]):
-    from datasets import Dataset
+class ManifestDataset:
+    """List-backed training set. Does not import Hugging Face ``datasets``.
 
-    payload = [
-        {
-            "audio_path": r["audio_path"],
-            "text": r["text"],
-            "language": r.get("language", "javind"),
-            "style_tag": r.get("style_tag", ""),
-            "corpus": r.get("corpus", ""),
-            "weight": float(r.get("weight", 1.0) or 1.0),
-            # Length-grouped batching needs an integer proxy for cost; audio
-            # duration dominates the sequence length here, not the transcript.
-            "length": int(max(1.0, float(r.get("duration", 10.0) or 10.0)) * 50),
-        }
-        for r in rows
-    ]
-    return Dataset.from_list(payload)
+    The competition runtime ships transformers / peft / vLLM but not ``datasets``,
+    and the only thing we needed from it was ``Dataset.from_list``. Items stay
+    plain dicts so the collator can load audio itself.
+
+    ``lengths`` is the integer cost LengthGroupedSampler wants: audio duration
+    dominates sequence length here, not the transcript. Trainer only auto-infers
+    lengths from ``input_ids``, which do not exist until the collator runs.
+    """
+
+    def __init__(self, rows: Sequence[dict]):
+        self.rows = [
+            {
+                "audio_path": r["audio_path"],
+                "text": r["text"],
+                "language": r.get("language", "javind"),
+                "style_tag": r.get("style_tag", ""),
+                "corpus": r.get("corpus", ""),
+                "weight": float(r.get("weight", 1.0) or 1.0),
+                "length": int(max(1.0, float(r.get("duration", 10.0) or 10.0)) * 50),
+            }
+            for r in rows
+        ]
+        self.lengths = [row["length"] for row in self.rows]
+
+    def __len__(self) -> int:
+        return len(self.rows)
+
+    def __getitem__(self, index: int) -> dict:
+        return self.rows[index]
+
+
+def _as_hf_dataset(rows: Sequence[dict]) -> ManifestDataset:
+    """Back-compat name: used to return ``datasets.Dataset``."""
+    return ManifestDataset(rows)
 
 
 class _CastInputsTrainer:
@@ -508,6 +527,27 @@ class _CastInputsTrainer:
                         if hasattr(value, "is_floating_point") and value.is_floating_point():
                             inputs[key] = value.to(dtype=dtype)
                 return inputs
+
+            def _get_train_sampler(self, *args, **kwargs):
+                # transformers 4.57+ may pass dataset=; older calls take no args.
+                dataset = kwargs.get("dataset", self.train_dataset)
+                if args:
+                    dataset = args[0]
+                if self.args.group_by_length and hasattr(dataset, "lengths"):
+                    from torch.utils.data import RandomSampler
+                    from transformers.trainer_pt_utils import LengthGroupedSampler
+
+                    if not len(dataset):
+                        return RandomSampler(dataset)
+                    return LengthGroupedSampler(
+                        self.args.train_batch_size * self.args.gradient_accumulation_steps,
+                        dataset=dataset,
+                        lengths=list(dataset.lengths),
+                    )
+                try:
+                    return super()._get_train_sampler(*args, **kwargs)
+                except TypeError:
+                    return super()._get_train_sampler()
 
         return CastFloatInputsTrainer
 

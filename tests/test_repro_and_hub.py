@@ -161,6 +161,21 @@ def test_resolve_checkpoint_returns_local_directories_untouched():
         assert hub.resolve_checkpoint(tmp) == Path(tmp)
 
 
+def test_manifest_dataset_does_not_import_datasets():
+    from lit_jv.train_lora import ManifestDataset, _as_hf_dataset
+
+    rows = [
+        {"audio_path": "a.mp3", "text": "aku", "duration": 2.0, "corpus": "dev"},
+        {"audio_path": "b.mp3", "text": "ora", "duration": 10.0, "corpus": "dev"},
+    ]
+    dataset = _as_hf_dataset(rows)
+    assert isinstance(dataset, ManifestDataset)
+    assert len(dataset) == 2
+    assert dataset[0]["text"] == "aku"
+    assert dataset.lengths[1] == 500
+    assert "audio_path" in dataset[1]
+
+
 def test_train_spec_exposes_metrics_and_hub_controls():
     spec = TrainSpec()
     assert spec.report_to == ("tensorboard",)

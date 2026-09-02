@@ -42,7 +42,7 @@ submission_src/        exactly what gets zipped: main.py + config + fitted rules
 scripts/               packaging and local-test helpers
 tests/                 CPU-only test suite, including a full container dry run
 notebooks/             the analysis
-indonesian_dev/        development set (not tracked — copy it onto any new machine)
+indonesian_dev/        development set (tracked on a private repo so clones have it)
 artifacts/             generated: hypotheses, adapters, merged weights, ablation tables
 ```
 
@@ -59,23 +59,24 @@ python tests/test_submission_dryrun.py
 python scripts/run_notebook_as_script.py     # executes every notebook code cell
 ```
 
-`indonesian_dev/` is gitignored (audio + transcripts). A `git clone` on RunPod therefore
-does not include it, and tests that need real references skip rather than fail. To
-actually train or run the notebook there, copy the folder from the machine that already
-has it:
+On a private repo, `indonesian_dev/` (metadata + clips, ~71 MB) is tracked so a clone
+on RunPod already has it. If a box still lacks `metadata.tsv`, either `git pull` or:
 
 ```bash
-# from your local machine — the folder must contain metadata.tsv and clips/
 rsync -avP indonesian_dev/ runpod:/workspace/Lost_In_Transcription_Indonesian_Javanese_Track/indonesian_dev/
-
-# or, if it already lives somewhere else on the box
-export LIT_DEV_DIR=/workspace/data/indonesian_dev
 ```
 
-Copy [`.env.example`](.env.example) to `.env` and fill it in. Nothing is required if
-`indonesian_dev/` sits next to the repo and you are not publishing to the Hub.
-The notebook loads `.env` on the first cell; already-exported values win, so a
-RunPod secret still overrides the file.
+Copy [`.env.example`](.env.example) to `.env` if you want Hub publishing or a non-default
+data path. Then on the GPU box:
+
+```bash
+source scripts/setup_env.sh
+```
+
+That exports every `LIT_*` / `HF_*` variable, loads `.env` without clobbering secrets
+already in the environment, and refuses to continue if `metadata.tsv` or `clips/` is
+missing. Do not execute the file (`bash scripts/setup_env.sh`) — the exports would die
+with the process.
 
 For the GPU work, match the competition runtime rather than installing loosely — the
 container pins `transformers==4.57.6`, `vllm==0.23.0`, `qwen-asr==0.0.6`,

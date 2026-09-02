@@ -110,9 +110,8 @@ def resolve_dev_dir(explicit: str | Path | None = None) -> Path:
     """Locate the development set.
 
     Order: an explicit path, then ``LIT_DEV_DIR``, then ``<repo>/indonesian_dev``.
-    The folder is gitignored (audio + transcripts), so a fresh clone on a rented
-    GPU box will not have it until it is copied there or the env var is pointed
-    at it.
+    On a private repo the folder is tracked. Override this when it lives
+    somewhere other than ``<repo>/indonesian_dev``.
     """
     if explicit is not None:
         return Path(explicit)
@@ -145,9 +144,10 @@ def load_dev_manifest(
     if not metadata.is_file():
         raise FileNotFoundError(
             f"development set not found at {metadata}. "
-            "The folder is gitignored, so a git clone on RunPod does not include it. "
-            "Copy indonesian_dev/ onto this machine (rsync/scp), or set LIT_DEV_DIR "
-            "to the directory that contains metadata.tsv."
+            "The folder must contain metadata.tsv and clips/. "
+            "On a private repo it is tracked: git add indonesian_dev && git push, "
+            "then git pull on this machine. Or set LIT_DEV_DIR, or "
+            "source scripts/setup_env.sh after copying the folder."
         )
     clips = dev_dir / clips_dirname
     rows: list[dict] = []

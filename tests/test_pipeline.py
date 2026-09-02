@@ -69,7 +69,7 @@ def test_load_dev_manifest_explains_a_missing_folder():
     except FileNotFoundError as exc:
         message = str(exc)
         assert "LIT_DEV_DIR" in message
-        assert "gitignored" in message
+        assert "metadata.tsv" in message
     else:
         raise AssertionError("expected FileNotFoundError")
 
