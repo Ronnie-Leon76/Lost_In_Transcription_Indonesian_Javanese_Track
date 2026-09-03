@@ -21,6 +21,7 @@ sys.path.insert(0, str(ROOT / "src"))
 
 from lit_jv import hub, repro  # noqa: E402
 from lit_jv import data as lit_data  # noqa: E402
+from lit_jv.decode import fit_vllm_gpu_memory_utilization, reclaim_qwen3_asr_transformers_classes  # noqa: E402
 from lit_jv.train_lora import LoraSpec, TrainSpec  # noqa: E402
 
 DEV_DIR = lit_data.resolve_dev_dir()
@@ -36,6 +37,11 @@ def _require_dev() -> None:
             f"no development set at {DEV_DIR} "
             "(copy indonesian_dev/ here, or set LIT_DEV_DIR)"
         )
+
+
+def test_vllm_memory_fit_never_exceeds_the_requested_fraction():
+    assert fit_vllm_gpu_memory_utilization(0.85) <= 0.85
+    reclaim_qwen3_asr_transformers_classes()  # no-op without transformers/vllm
 
 
 def test_seeding_is_reproducible_across_processes():

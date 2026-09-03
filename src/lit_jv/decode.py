@@ -95,6 +95,101 @@ class FallbackConfig:
 
 
 # --------------------------------------------------------------------------
+# GPU / AutoConfig hygiene
+# --------------------------------------------------------------------------
+
+
+def release_cuda() -> None:
+    """Drop cached CUDA blocks so the next engine can see real free memory.
+
+    Training and a failed vLLM start both leave the GPU allocated. vLLM then
+    asks for ``gpu_memory_utilization * total`` of *currently free* memory and
+    dies if that number is larger than what is left.
+    """
+    import gc
+
+    gc.collect()
+    try:
+        import torch
+
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+            torch.cuda.ipc_collect()
+            torch.cuda.synchronize()
+    except Exception:
+        pass
+
+
+def fit_vllm_gpu_memory_utilization(
+    desired: float = 0.85,
+    floor: float = 0.20,
+    reserve_gib: float = 1.5,
+) -> float:
+    """Cap vLLM's reservation at what is actually free right now."""
+    try:
+        import torch
+    except ImportError:
+        return desired
+    if not torch.cuda.is_available():
+        return desired
+    free_b, total_b = torch.cuda.mem_get_info()
+    free_gib, total_gib = free_b / 1024**3, total_b / 1024**3
+    usable = max(0.0, (free_gib - reserve_gib) / total_gib)
+    fitted = min(float(desired), max(floor, usable))
+    return round(fitted, 3)
+
+
+def reclaim_qwen3_asr_transformers_classes() -> None:
+    """Undo vLLM's AutoConfig hijack of the ``qwen3_asr`` model type.
+
+    Importing vLLM registers ``vllm.transformers_utils.configs.qwen3_asr.Qwen3ASRConfig``.
+    ``qwen_asr.Qwen3ASRModel.from_pretrained`` then loads that class, and
+    ``AutoModel`` refuses it ("Unrecognized configuration class ... Qwen3ASRConfig").
+    Put the transformers / qwen_asr class back.
+    """
+    import importlib
+
+    try:
+        from transformers import AutoConfig, AutoModel
+    except ImportError:
+        return
+
+    candidates = (
+        ("qwen_asr.core.transformers_backend", "Qwen3ASRConfig", "Qwen3ASRForConditionalGeneration"),
+        ("transformers.models.qwen3_asr.configuration_qwen3_asr", "Qwen3ASRConfig", None),
+        ("transformers.models.qwen3_asr.modeling_qwen3_asr", None, "Qwen3ASRForConditionalGeneration"),
+    )
+    config_cls = model_cls = None
+    for module_name, config_name, model_name in candidates:
+        try:
+            module = importlib.import_module(module_name)
+        except Exception:
+            continue
+        if config_name and config_cls is None:
+            cls = getattr(module, config_name, None)
+            if cls is not None and "vllm" not in getattr(cls, "__module__", ""):
+                config_cls = cls
+        if model_name and model_cls is None:
+            cls = getattr(module, model_name, None)
+            if cls is not None and "vllm" not in getattr(cls, "__module__", ""):
+                model_cls = cls
+    if config_cls is None:
+        return
+    try:
+        AutoConfig.register("qwen3_asr", config_cls, exist_ok=True)
+    except TypeError:
+        AutoConfig.register("qwen3_asr", config_cls)
+    if model_cls is not None:
+        try:
+            AutoModel.register(config_cls, model_cls, exist_ok=True)
+        except TypeError:
+            try:
+                AutoModel.register(config_cls, model_cls)
+            except Exception:
+                pass
+
+
+# --------------------------------------------------------------------------
 # Backends
 # --------------------------------------------------------------------------
 
@@ -135,9 +230,16 @@ class VllmBackend(Qwen3AsrBackend):
     ):
         from vllm import LLM
 
+        release_cuda()
+        fitted = fit_vllm_gpu_memory_utilization(gpu_memory_utilization)
+        if fitted + 1e-6 < gpu_memory_utilization:
+            print(
+                f"vLLM gpu_memory_utilization {gpu_memory_utilization:.2f} -> {fitted:.2f} "
+                "(capped to currently free GPU memory)"
+            )
         kwargs: dict[str, Any] = dict(
             model=str(model_path),
-            gpu_memory_utilization=gpu_memory_utilization,
+            gpu_memory_utilization=fitted,
             max_model_len=max_model_len,
             max_num_seqs=max_num_seqs,
             dtype=dtype,
@@ -219,6 +321,10 @@ class VllmBackend(Qwen3AsrBackend):
             results.append(candidates)
         return results
 
+    def close(self) -> None:
+        self.llm = None
+        release_cuda()
+
 
 class TransformersBackend(Qwen3AsrBackend):
     """transformers fallback built on the ``qwen_asr`` model classes.
@@ -241,6 +347,8 @@ class TransformersBackend(Qwen3AsrBackend):
             Qwen3ASRProcessor,
         )
 
+        reclaim_qwen3_asr_transformers_classes()
+        release_cuda()
         torch_dtype = getattr(torch, dtype)
         kwargs: dict[str, Any] = {"dtype": torch_dtype}
         if attn_implementation:
@@ -295,6 +403,11 @@ class TransformersBackend(Qwen3AsrBackend):
             )
         return results
 
+    def close(self) -> None:
+        self.model = None
+        self.processor = None
+        release_cuda()
+
 
 def build_backend(
     model_path: str | Path,
@@ -304,6 +417,8 @@ def build_backend(
     log: Callable[[str], None] = print,
 ) -> Qwen3AsrBackend:
     """Instantiate the best available backend, reporting which one was used."""
+    reclaim_qwen3_asr_transformers_classes()
+    release_cuda()
     order = ["vllm", "transformers"] if prefer == "vllm" else ["transformers", "vllm"]
     errors: list[str] = []
     for name in order:
@@ -338,6 +453,13 @@ class Qwen3AsrDecoder:
         self.length_prior = length_prior or LengthPrior()
         self.fallback = fallback or FallbackConfig()
         self.log = log
+
+    def close(self) -> None:
+        closer = getattr(self.backend, "close", None)
+        if callable(closer):
+            closer()
+        else:
+            release_cuda()
 
     # -- audio ------------------------------------------------------------
 

@@ -517,6 +517,47 @@ def load_flat_corpus(
     return rows
 
 
+def find_corpus_root(path: str | Path) -> Path:
+    """Locate ``metadata.tsv`` / ``clips/`` after a tarball extracts a nested folder."""
+    path = Path(path)
+    if (path / "metadata.tsv").is_file() or (path / "clips").is_dir():
+        return path
+    for meta in sorted(path.rglob("metadata.tsv")):
+        return meta.parent
+    for clips in sorted(path.rglob("clips")):
+        if clips.is_dir():
+            return clips.parent
+    return path
+
+
+def load_extracted_mdc_corpus(
+    root: str | Path,
+    *,
+    corpus: str = "mdc",
+    language: str = "nah",
+    style_tag: str | None = None,
+    weight: float = 1.0,
+) -> list[dict]:
+    """Load a Mozilla Data Collective clip corpus (Indonesian-Javanese or Nahuatl)."""
+    from .prompts import STYLE_VOICE_NOTE_SP_NH, STYLE_READ
+
+    root = find_corpus_root(root)
+    tag = style_tag or (
+        STYLE_VOICE_NOTE_SP_NH if language in {"nah", "nhe", "nci", "nahuatl", "spnh"} else STYLE_READ
+    )
+    meta = "metadata.tsv" if (root / "metadata.tsv").is_file() else "metadata.csv"
+    clips = "clips" if (root / "clips").is_dir() else "."
+    return load_flat_corpus(
+        root,
+        metadata_name=meta,
+        clips_dirname=clips,
+        style_tag=tag,
+        corpus=corpus,
+        language=language,
+        weight=weight,
+    )
+
+
 # --------------------------------------------------------------------------
 # Training manifest assembly
 # --------------------------------------------------------------------------

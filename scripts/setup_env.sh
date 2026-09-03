@@ -92,6 +92,7 @@ _lit_load_dotenv "$_LIT_ROOT/.env"
 
 _lit_default LIT_DEV_DIR "$_LIT_ROOT/indonesian_dev"
 _lit_default LIT_JEMBER "$_LIT_ROOT/jember"
+_lit_default LIT_NAHUATL_DIR "$_LIT_ROOT/nahuatl_dev"
 _lit_default LIT_SEED 3407
 _lit_default LIT_DETERMINISTIC 0
 _lit_default LIT_MODEL "Qwen/Qwen3-ASR-1.7B"
@@ -114,6 +115,8 @@ _LIT_CLIPS="$LIT_DEV_DIR/clips"
 echo "LIT_ROOT              $_LIT_ROOT"
 echo "LIT_DEV_DIR           $LIT_DEV_DIR"
 echo "LIT_JEMBER            $LIT_JEMBER"
+echo "LIT_NAHUATL_DIR       ${LIT_NAHUATL_DIR:-<unset>}"
+echo "MDC_API_KEY           $(_lit_is_set MDC_API_KEY && echo present || echo absent)"
 echo "LIT_SEED              $LIT_SEED"
 echo "LIT_MODEL             $LIT_MODEL"
 echo "LIT_BASE_MODEL        $LIT_BASE_MODEL"

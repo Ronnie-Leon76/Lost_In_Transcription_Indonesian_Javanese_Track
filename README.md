@@ -89,6 +89,17 @@ already in the environment, and refuses to continue if `metadata.tsv` or `clips/
 missing. Do not execute the file (`bash scripts/setup_env.sh`) — the exports would die
 with the process.
 
+Optional extra audio from Mozilla Data Collective (Jember, Tetelancingo Nahuatl) is
+downloaded on a **development** machine only. Put `MDC_API_KEY` in `.env`, then:
+
+```bash
+python scripts/download_mdc_dataset.py --out nahuatl_dev
+export LIT_NAHUATL_DIR=$PWD/nahuatl_dev
+```
+
+Do **not** put that key in `submission.zip`. The official container has no network;
+test clips are already at `/code_execution/data/clips/`.
+
 For the GPU work, match the competition runtime rather than installing loosely — the
 container pins `transformers==4.57.6`, `vllm==0.23.0`, `qwen-asr==0.0.6`,
 `torch==2.11.0+cu130`, `peft==0.20.0` on Python 3.12:

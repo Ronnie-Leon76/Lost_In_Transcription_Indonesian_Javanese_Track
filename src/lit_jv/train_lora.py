@@ -476,6 +476,10 @@ def build_model(spec: TrainSpec, adapter_path: str | Path | None = None):
     from peft import LoraConfig, PeftModel, get_peft_model
     from qwen_asr import Qwen3ASRModel
 
+    from .decode import reclaim_qwen3_asr_transformers_classes, release_cuda
+
+    reclaim_qwen3_asr_transformers_classes()
+    release_cuda()
     wrapper = Qwen3ASRModel.from_pretrained(
         spec.model_path,
         dtype=torch.bfloat16 if spec.bf16 else torch.float16,
@@ -985,6 +989,10 @@ def train(
                 for s in stages
             ],
         ).url()
+    from .decode import release_cuda
+
+    del model, processor
+    release_cuda()
     return result
 
 
@@ -1010,6 +1018,10 @@ def fuse_adapters(
     from peft import PeftModel
     from qwen_asr import Qwen3ASRModel
 
+    from .decode import reclaim_qwen3_asr_transformers_classes, release_cuda
+
+    reclaim_qwen3_asr_transformers_classes()
+    release_cuda()
     wrapper = Qwen3ASRModel.from_pretrained(
         spec.model_path, dtype=torch.bfloat16 if spec.bf16 else torch.float16, device_map=None
     )
@@ -1049,6 +1061,10 @@ def merge_and_save(
     from peft import PeftModel
     from qwen_asr import Qwen3ASRModel
 
+    from .decode import reclaim_qwen3_asr_transformers_classes, release_cuda
+
+    reclaim_qwen3_asr_transformers_classes()
+    release_cuda()
     wrapper = Qwen3ASRModel.from_pretrained(
         spec.model_path, dtype=torch.bfloat16 if spec.bf16 else torch.float16, device_map=None
     )

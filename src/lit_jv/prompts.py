@@ -59,6 +59,7 @@ DEFAULT_FORCE_LANGUAGE = "Indonesian"
 STYLE_VOICE_NOTE = "wa-voicenote-id-jv"
 STYLE_JEMBER = "jember-session-jv"
 STYLE_READ = "read-tts"
+STYLE_VOICE_NOTE_SP_NH = "wa-voicenote-sp-nh"
 
 
 def render_chat_prompt(context: str, force_language: str | None = DEFAULT_FORCE_LANGUAGE) -> str:
@@ -144,12 +145,30 @@ CONTEXT_PROSE: dict[str, str] = {
         "Salin apa adanya termasuk pengulangan, kata terpotong, dan jeda ragu "
         "yang ditulis dengan tiga titik seperti e..."
     ),
+    "codeswitch_spnh": (
+        "Nota de voz de una conversacion informal entre hablantes bilingues. "
+        "Espanol mezclado con nahuatl en la misma oracion. "
+        "Escribe cada palabra en la ortografia de su idioma, no traduzcas. "
+        "Copia disfluencias, cortes y pausas tal cual, incluso puntos suspensivos."
+    ),
+    "monolingual_es": (
+        "Nota de voz de una conversacion informal en espanol. "
+        "Copia tal cual, incluyendo repeticiones, cortes y pausas."
+    ),
 }
 
 _LANGUAGE_FIELD_TO_PROSE = {
     "javind": "codeswitch_style",
     "jav": "codeswitch_style",
     "ind": "monolingual_id",
+    "spnh": "codeswitch_spnh",
+    "nah": "codeswitch_spnh",
+    "nhe": "codeswitch_spnh",
+    "nci": "codeswitch_spnh",
+    "nahuatl": "codeswitch_spnh",
+    "spa": "monolingual_es",
+    "es": "monolingual_es",
+    "spanish": "monolingual_es",
 }
 
 
@@ -195,9 +214,13 @@ def build_context(
     prose_key = config.prose
     # Only the code-switch variants get specialised per clip; "none" and
     # "minimal" are ablation settings and must stay untouched.
-    if config.use_language_field and language_field and prose_key in ("codeswitch", "codeswitch_style"):
+    if config.use_language_field and language_field and prose_key in (
+        "codeswitch",
+        "codeswitch_style",
+        "codeswitch_spnh",
+    ):
         mapped = _LANGUAGE_FIELD_TO_PROSE.get(str(language_field).strip().lower())
-        if mapped == "monolingual_id":
+        if mapped in ("monolingual_id", "monolingual_es", "codeswitch_spnh"):
             prose_key = mapped
     parts: list[str] = []
     tag = style_tag if style_tag is not None else config.style_tag

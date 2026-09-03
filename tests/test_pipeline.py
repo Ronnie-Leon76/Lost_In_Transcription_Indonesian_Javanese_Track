@@ -144,6 +144,15 @@ def test_language_field_switches_the_declaration():
     assert prompts.STYLE_VOICE_NOTE in code_switched
 
 
+def test_nahuatl_language_field_selects_spanish_nahuatl_prose():
+    config = prompts.PromptConfig(prose="codeswitch_spnh")
+    mixed = prompts.build_context(config, language_field="nah")
+    spanish = prompts.build_context(config, language_field="spa")
+    assert "nahuatl" in mixed.lower()
+    assert "espanol" in spanish.lower()
+    assert "nahuatl" not in spanish.lower()
+
+
 def test_glossary_prefers_marked_spellings():
     _require_dev()
     rows = data.load_dev_manifest(DEV_DIR, with_durations=False)
@@ -309,6 +318,17 @@ def test_conversation_holdout_is_disjoint():
     assert len(train_idx) + len(valid_idx) == len(rows)
     assert {rows[i]["convo_id"] for i in valid_idx} == {"2"}
     assert "2" not in {rows[i]["convo_id"] for i in train_idx}
+
+
+def test_find_corpus_root_walks_a_nested_extract():
+    import tempfile
+
+    with tempfile.TemporaryDirectory() as tmp:
+        nested = Path(tmp) / "tetelancingo-nahuatl" / "clips"
+        nested.mkdir(parents=True)
+        (nested.parent / "metadata.tsv").write_text("audio_filename\ttranscript\n", encoding="utf-8")
+        found = data.find_corpus_root(tmp)
+        assert found == nested.parent
 
 
 def test_timestamp_parsing():

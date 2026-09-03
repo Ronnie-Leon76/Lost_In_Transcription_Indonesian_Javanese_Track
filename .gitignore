@@ -14,5 +14,7 @@ runtime/ground_truth.csv
 # indonesian_dev/ is tracked so a private-repo clone on RunPod has metadata.tsv
 # and clips/ without a separate rsync.
 jember/
+nahuatl_dev/
+*.tar.gz
 .env
 *.token
