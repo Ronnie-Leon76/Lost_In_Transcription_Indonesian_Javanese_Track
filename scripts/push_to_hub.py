@@ -2,11 +2,15 @@
 
     source scripts/setup_env.sh
     python scripts/push_to_hub.py
-    python scripts/push_to_hub.py --merged artifacts/merged-qwen3asr --upload-merged
+    python scripts/push_to_hub.py --zip submission/submission.zip
 
 Requires ``LIT_HF_REPO`` and ``HF_TOKEN`` (in the environment or in ``.env``).
 Adapters are tens of megabytes. The merged 1.7B checkpoint is gigabytes and is
 only uploaded with ``--upload-merged`` or ``LIT_HF_UPLOAD_MERGED=1``.
+
+``--zip`` uploads the packed competition archive so you can download it on
+another machine and click Make new submission. The evaluator has no network:
+the zip must already contain ``main.py`` and ``model/``.
 """
 
 from __future__ import annotations
@@ -34,6 +38,13 @@ def main() -> int:
         action="store_true",
         help="Also push the merged 1.7B weights (gigabytes).",
     )
+    parser.add_argument(
+        "--zip",
+        type=Path,
+        default=None,
+        help="Upload this competition archive (usually submission/submission.zip) "
+        "to the Hub as submission.zip so you can download it elsewhere.",
+    )
     parser.add_argument("--private", action="store_true", default=None)
     args = parser.parse_args()
 
@@ -54,6 +65,25 @@ def main() -> int:
         spec.upload_merged = True
     if args.private is True:
         spec.private = True
+
+    if args.zip is not None:
+        zip_path = args.zip
+        if not zip_path.is_file():
+            print(f"archive not found: {zip_path}", file=sys.stderr)
+            return 2
+        url = hub.push_file(
+            zip_path, spec, "submission.zip", f"Add competition archive {zip_path.name}"
+        )
+        repo = spec.repo_id
+        print(url)
+        print(f"https://huggingface.co/{repo}/blob/main/submission.zip")
+        print()
+        print("On the machine where you click Make new submission:")
+        print(f"  huggingface-cli download {repo} submission.zip --local-dir .")
+        print(f"  # or: wget -O submission.zip https://huggingface.co/{repo}/resolve/main/submission.zip")
+        print("Then upload that submission.zip on the competition Submissions page.")
+        print("The evaluator has no network; this zip is the whole submission.")
+        return 0
 
     adapters = {}
     if args.adapters.is_dir():
