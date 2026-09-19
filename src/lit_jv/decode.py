@@ -243,7 +243,6 @@ class VllmBackend(Qwen3AsrBackend):
             max_model_len=max_model_len,
             max_num_seqs=max_num_seqs,
             dtype=dtype,
-            trust_remote_code=True,
             limit_mm_per_prompt=limit_mm_per_prompt or {"audio": 1},
         )
         kwargs.update(engine_kwargs)

@@ -10,6 +10,11 @@
 # The CPU-side notebook dependencies are intentionally shared with local work.
 -r requirements-dev.txt
 
+# Some Runpod images set HF_HUB_ENABLE_HF_TRANSFER=1. This extra supplies the
+# matching transfer backend for the Hugging Face Hub version used by the model
+# downloader.
+huggingface_hub[hf_transfer]>=0.26
+
 # LoRA training is imported lazily by the notebook's GPU sections.
 peft==0.20.0
 datasets
