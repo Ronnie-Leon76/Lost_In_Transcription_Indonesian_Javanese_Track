@@ -23,6 +23,7 @@ from lit_jv import hub, repro  # noqa: E402
 from lit_jv import data as lit_data  # noqa: E402
 from lit_jv.decode import fit_vllm_gpu_memory_utilization, reclaim_qwen3_asr_transformers_classes  # noqa: E402
 from lit_jv.train_lora import LoraSpec, TrainSpec  # noqa: E402
+from lit_jv.train_lora import generation_sequences  # noqa: E402
 
 DEV_DIR = lit_data.resolve_dev_dir()
 
@@ -231,6 +232,17 @@ def test_train_spec_exposes_metrics_and_hub_controls():
     assert spec.deterministic is False
     # tensorboard_dir defaults to <output_dir>/runs, resolved at run_stage time.
     assert spec.tensorboard_dir is None
+
+
+def test_generation_sequences_accepts_qwen_tuple_output():
+    """Runpod's Qwen3-ASR build returns token IDs wrapped in a tuple."""
+
+    class Tokens:
+        ndim = 2
+
+    tokens = Tokens()
+    assert generation_sequences(tokens) is tokens
+    assert generation_sequences((tokens, {"unused": True})) is tokens
 
 
 def run() -> int:

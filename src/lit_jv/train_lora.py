@@ -112,6 +112,28 @@ def write_generation_config(directory: str | Path, config=None) -> Path:
     return path
 
 
+def generation_sequences(output):
+    """Extract token IDs from every ``generate`` return shape we support.
+
+    Transformers normally returns a tensor for ``return_dict_in_generate=False``.
+    Qwen3-ASR builds observed in Runpod can instead return a tuple whose first
+    item is that tensor. Slicing the tuple as if it were a tensor breaks the
+    in-training WER probe after training has already finished, leaving no
+    usable checkpoint-selection metric.
+    """
+    sequences = getattr(output, "sequences", output)
+    if isinstance(sequences, tuple):
+        if not sequences:
+            raise RuntimeError("model.generate returned an empty tuple")
+        sequences = sequences[0]
+    if not hasattr(sequences, "ndim") or sequences.ndim != 2:
+        raise TypeError(
+            "model.generate did not return a 2-D token tensor "
+            f"(got {type(sequences).__name__})"
+        )
+    return sequences
+
+
 # --------------------------------------------------------------------------
 # Configuration
 # --------------------------------------------------------------------------
@@ -488,6 +510,10 @@ def build_model(spec: TrainSpec, adapter_path: str | Path | None = None):
     model, processor = wrapper.model, wrapper.processor
     patch_outer_forward(model)
 
+    # Trainer enables gradient checkpointing below. Keeping the KV cache on at
+    # that point produces a noisy warning and is ignored by Transformers anyway.
+    model.config.use_cache = not spec.gradient_checkpointing
+
     from transformers import GenerationConfig
 
     model.generation_config = sanitize_generation_config(
@@ -678,8 +704,9 @@ def generate_transcripts(
                     num_beams=1,
                     pad_token_id=getattr(processor.tokenizer, "pad_token_id", None),
                 )
+            sequences = generation_sequences(generated)
             prompt_len = tensors["input_ids"].shape[1]
-            for sequence in generated[:, prompt_len:]:
+            for sequence in sequences[:, prompt_len:]:
                 text = processor.tokenizer.decode(sequence, skip_special_tokens=True)
                 out.append(parse_generation(text, spec.prompt.force_language))
     finally:

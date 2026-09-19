@@ -386,7 +386,9 @@ class TransformersBackend(Qwen3AsrBackend):
             generate_kwargs.update(do_sample=False)
         with torch.no_grad():
             output = self.model.generate(**inputs, **generate_kwargs)
-        sequences = getattr(output, "sequences", output)
+        from .train_lora import generation_sequences
+
+        sequences = generation_sequences(output)
         prompt_len = inputs["input_ids"].shape[1]
         decoded = self.processor.batch_decode(
             sequences[:, prompt_len:], skip_special_tokens=True, clean_up_tokenization_spaces=False
