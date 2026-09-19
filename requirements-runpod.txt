@@ -1,0 +1,19 @@
+# Runpod GPU environment for the complete notebook: analysis, training,
+# inference, packaging, and the CPU-side test suite.
+#
+# Install this into a fresh Python 3.12 CUDA pod with:
+#   python -m pip install --upgrade --upgrade-strategy eager -r requirements-runpod.txt
+#
+# The CPU-side notebook dependencies are intentionally shared with local work.
+-r requirements-dev.txt
+
+# LoRA training is imported lazily by the notebook's GPU sections.
+peft==0.20.0
+datasets
+
+# Do not separately pin torch, CUDA wheels, transformers, or vLLM here. Qwen's
+# own extra is the compatibility contract: qwen-asr 0.0.6 pins transformers
+# 4.57.6 and vLLM 0.14.0.  Let pip select the CUDA-compatible torch wheel for
+# the pod instead of mixing a torch wheel from one CUDA release with a vLLM
+# wheel from another.
+qwen-asr[vllm]==0.0.6

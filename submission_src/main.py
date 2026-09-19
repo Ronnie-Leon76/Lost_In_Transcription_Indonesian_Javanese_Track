@@ -93,15 +93,24 @@ def main() -> int:
     write_submission(SUBMISSION_PATH, filenames, transcripts)
     log("placeholder submission written")
 
+    # ``run_inference`` writes a checkpoint CSV after every completed pass.  Do
+    # not replace that file with the all-empty Stage 0 placeholder when a later
+    # optional pass fails: the checkpoint is deliberately the best recoverable
+    # answer in that case.
+    inference_completed = False
     try:
         transcripts = run_inference(rows, config, deadline, filenames)
+        inference_completed = True
     except Exception:
-        log("inference failed; keeping the best submission written so far")
+        log("inference failed; preserving the latest checkpoint submission")
         traceback.print_exc()
 
-    write_submission(SUBMISSION_PATH, filenames, transcripts)
-    empty = sum(1 for t in transcripts if not t.strip())
-    log(f"final submission written; {len(rows) - empty}/{len(rows)} clips non-empty")
+    if inference_completed:
+        write_submission(SUBMISSION_PATH, filenames, transcripts)
+        empty = sum(1 for t in transcripts if not t.strip())
+        log(f"final submission written; {len(rows) - empty}/{len(rows)} clips non-empty")
+    else:
+        log("final submission is the latest successful checkpoint")
     return 0
 
 

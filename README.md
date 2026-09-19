@@ -56,17 +56,25 @@ pip install -r requirements-dev.txt
 python tests/test_pipeline.py
 python tests/test_repro_and_hub.py
 python tests/test_submission_dryrun.py
+python tests/test_submission_resilience.py
 python scripts/run_notebook_as_script.py     # executes every notebook code cell
 ```
 
-For the GPU work, match the competition runtime rather than installing loosely — the
-container pins `transformers==4.57.6`, `vllm==0.23.0`, `qwen-asr==0.0.6`,
-`torch==2.11.0+cu130`, `peft==0.20.0` on Python 3.12:
+For the competition container, use its locked image — do not install packages inside
+the submitted archive. For a Runpod GPU pod, create a fresh **Python 3.12** environment
+and install the repository's notebook environment before training or decoding:
 
 ```bash
-git clone https://github.com/drivendataorg/lost-in-transcription-runtime
-cd lost-in-transcription-runtime && uv sync
+python -m pip install --upgrade --upgrade-strategy eager -r requirements-runpod.txt
+python scripts/verify_runpod.py
 ```
+
+This deliberately pins `qwen-asr==0.0.6`, whose published compatibility set pins
+`transformers==4.57.6` and `vllm==0.14.0`. It does not force a standalone Torch/CUDA
+wheel: that is the usual source of Runpod ABI mismatches, and pip must select a build
+compatible with the pod's driver. `verify_runpod.py` fails before a costly run if the
+resolved versions, imports, or CUDA access are wrong. The official Qwen package metadata
+is the source of truth for these pins.
 
 ## Workflow
 
@@ -86,7 +94,7 @@ python score.py runtime/ground_truth.csv --predicted-path runtime/submission/sub
 ```
 
 `pack_submission.py` verifies the archive after writing it: `main.py` at the root, the
-package present, the config and fitted rules present, weights present, and no
+package present, the config, fitted rules and their lexicon present, weights present, and no
 `__pycache__` or checkpoint files leaked in.
 
 ## Metrics and TensorBoard

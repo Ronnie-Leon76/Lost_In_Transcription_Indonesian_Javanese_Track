@@ -145,7 +145,13 @@ def main() -> int:
 def verify(archive_path: Path, expect_model: bool, config: dict) -> None:
     with zipfile.ZipFile(archive_path) as archive:
         names = archive.namelist()
+        corrupt = archive.testzip()
     problems: list[str] = []
+    if corrupt:
+        problems.append(f"corrupt zip member: {corrupt}")
+    duplicates = sorted({name for name in names if names.count(name) > 1})
+    if duplicates:
+        problems.append(f"duplicate archive member: {duplicates[0]}")
     if "main.py" not in names:
         problems.append("main.py is not at the archive root")
     if not any(n.startswith("lit_jv/") for n in names):
@@ -154,6 +160,18 @@ def verify(archive_path: Path, expect_model: bool, config: dict) -> None:
         problems.append("submission_config.json missing")
     if config.get("postprocess", "postprocess.json") not in names:
         problems.append(f"{config.get('postprocess', 'postprocess.json')} missing")
+    else:
+        # RulePipeline.load resolves its fitted lexicon relative to this file.
+        # Check that link here, before a two-hour remote job discovers it.
+        postprocess_name = config.get("postprocess", "postprocess.json")
+        with zipfile.ZipFile(archive_path) as archive:
+            try:
+                payload = json.loads(archive.read(postprocess_name))
+                lexicon_name = str(Path(postprocess_name).parent / payload["lexicon"])
+                if lexicon_name not in names:
+                    problems.append(f"post-processing lexicon missing: {lexicon_name}")
+            except (KeyError, TypeError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+                problems.append(f"invalid post-processing configuration: {exc}")
     if expect_model and not any(n.startswith("model/") for n in names):
         problems.append("model/ missing")
     if expect_model and not any(n.endswith(".safetensors") for n in names):
@@ -163,7 +181,7 @@ def verify(archive_path: Path, expect_model: bool, config: dict) -> None:
         problems.append(f"{len(bad)} excluded files leaked in (e.g. {bad[0]})")
     if problems:
         raise SystemExit("archive verification failed:\n  - " + "\n  - ".join(problems))
-    print("archive verified: entrypoint, package, config, rules" + (", weights" if expect_model else ""))
+    print("archive verified: entrypoint, package, config, rules, lexicon" + (", weights" if expect_model else ""))
 
 
 if __name__ == "__main__":
