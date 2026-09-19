@@ -81,6 +81,20 @@ class HubSpec:
     def token(self) -> str | None:
         return os.environ.get(self.token_env) or None
 
+    @classmethod
+    def from_env(cls) -> "HubSpec | None":
+        """Build a spec from ``LIT_HF_REPO`` / ``HF_TOKEN``. ``None`` if unset."""
+        repo_id = os.environ.get("LIT_HF_REPO")
+        if not repo_id:
+            return None
+        revision = os.environ.get("LIT_HF_REVISION") or None
+        return cls(
+            repo_id=repo_id,
+            private=os.environ.get("LIT_HF_PRIVATE", "1") == "1",
+            upload_merged=os.environ.get("LIT_HF_UPLOAD_MERGED") == "1",
+            revision=revision,
+        )
+
 
 def _api(spec: HubSpec):
     try:

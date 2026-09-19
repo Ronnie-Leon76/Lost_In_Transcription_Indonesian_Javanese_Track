@@ -42,7 +42,7 @@ submission_src/        exactly what gets zipped: main.py + config + fitted rules
 scripts/               packaging and local-test helpers
 tests/                 CPU-only test suite, including a full container dry run
 notebooks/             the analysis
-indonesian_dev/        development set (not tracked)
+indonesian_dev/        development set (tracked on a private repo so clones have it)
 artifacts/             generated: hypotheses, adapters, merged weights, ablation tables
 ```
 
@@ -60,9 +60,50 @@ python tests/test_submission_resilience.py
 python scripts/run_notebook_as_script.py     # executes every notebook code cell
 ```
 
-For the competition container, use its locked image — do not install packages inside
+On a private repo, `indonesian_dev/` (metadata + clips, ~71 MB) is tracked so a clone
+on RunPod already has it. If a box still lacks `metadata.tsv`, either `git pull` or:
+
+```bash
+rsync -avP indonesian_dev/ runpod:/workspace/Lost_In_Transcription_Indonesian_Javanese_Track/indonesian_dev/
+```
+
+To publish checkpoints to the Hub, set `HF_TOKEN` and `LIT_HF_REPO` in `.env`, then:
+
+```bash
+source scripts/setup_env.sh
+python scripts/push_to_hub.py                  # adapters + logs + manifest
+python scripts/push_to_hub.py --upload-merged  # also the merged 1.7B weights
+```
+
+Training pushes adapters automatically when those two variables are set. The notebook
+cell §10.3 and the fusion cell do the same after a merge.
+
+Copy [`.env.example`](.env.example) to `.env` if you want Hub publishing or a non-default
+data path. Then on the GPU box:
+
+```bash
+source scripts/setup_env.sh
+```
+
+That exports every `LIT_*` / `HF_*` variable, loads `.env` without clobbering secrets
+already in the environment, and refuses to continue if `metadata.tsv` or `clips/` is
+missing. Do not execute the file (`bash scripts/setup_env.sh`) — the exports would die
+with the process.
+
+Optional extra audio from Mozilla Data Collective (Jember, Tetelancingo Nahuatl) is
+downloaded on a **development** machine only. Put `MDC_API_KEY` in `.env`, then:
+
+```bash
+python scripts/download_mdc_dataset.py --out nahuatl_dev
+export LIT_NAHUATL_DIR=$PWD/nahuatl_dev
+```
+
+Do **not** put that key in `submission.zip`. The official container has no network;
+test clips are already at `/code_execution/data/clips/`.
+
+For the competition container, use its locked image — never install packages inside
 the submitted archive. For a Runpod GPU pod, create a fresh **Python 3.12** environment
-and install the repository's notebook environment before training or decoding:
+and install the repository's complete notebook environment before training or decoding:
 
 ```bash
 python -m pip install --upgrade --upgrade-strategy eager -r requirements-runpod.txt

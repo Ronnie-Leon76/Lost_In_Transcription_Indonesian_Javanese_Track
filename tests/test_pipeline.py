@@ -17,7 +17,19 @@ sys.path.insert(0, str(ROOT / "src"))
 
 from lit_jv import combine, data, postprocess, prompts, scoring  # noqa: E402
 
-DEV_DIR = ROOT / "indonesian_dev"
+DEV_DIR = data.resolve_dev_dir()
+
+
+class Skip(Exception):
+    """Optional local corpus is absent. Not a failure."""
+
+
+def _require_dev() -> None:
+    if not data.dev_dir_ready(DEV_DIR):
+        raise Skip(
+            f"no development set at {DEV_DIR} "
+            "(copy indonesian_dev/ here, or set LIT_DEV_DIR)"
+        )
 
 
 # --------------------------------------------------------------------------
@@ -29,7 +41,58 @@ def test_scorer_self_check():
     scoring.self_check()
 
 
+def test_load_dotenv_fills_missing_keys_only(tmp_path=None):
+    import os
+    import tempfile
+
+    with tempfile.TemporaryDirectory() as tmp:
+        path = Path(tmp) / ".env"
+        path.write_text(
+            "# comment\nLIT_DOTENV_PROBE=from-file\nLIT_DOTENV_KEEP=from-file\n",
+            encoding="utf-8",
+        )
+        os.environ.pop("LIT_DOTENV_PROBE", None)
+        os.environ["LIT_DOTENV_KEEP"] = "from-shell"
+        try:
+            assert data.load_dotenv(path) == path
+            assert os.environ["LIT_DOTENV_PROBE"] == "from-file"
+            assert os.environ["LIT_DOTENV_KEEP"] == "from-shell"
+            assert data.load_dotenv(Path(tmp) / "missing.env") is None
+        finally:
+            os.environ.pop("LIT_DOTENV_PROBE", None)
+            os.environ.pop("LIT_DOTENV_KEEP", None)
+
+
+def test_load_dev_manifest_explains_a_missing_folder():
+    try:
+        data.load_dev_manifest("/definitely/missing/lit-dev")
+    except FileNotFoundError as exc:
+        message = str(exc)
+        assert "LIT_DEV_DIR" in message
+        assert "metadata.tsv" in message
+    else:
+        raise AssertionError("expected FileNotFoundError")
+
+
+def test_resolve_dev_dir_honours_env_and_explicit_path():
+    import os
+
+    old = os.environ.get("LIT_DEV_DIR")
+    try:
+        os.environ["LIT_DEV_DIR"] = "/tmp/lit-dev-from-env"
+        assert data.resolve_dev_dir() == Path("/tmp/lit-dev-from-env")
+        assert data.resolve_dev_dir("/explicit") == Path("/explicit")
+        os.environ.pop("LIT_DEV_DIR")
+        assert data.resolve_dev_dir().name == "indonesian_dev"
+    finally:
+        if old is None:
+            os.environ.pop("LIT_DEV_DIR", None)
+        else:
+            os.environ["LIT_DEV_DIR"] = old
+
+
 def test_scoring_space_is_a_fixed_point_on_real_references():
+    _require_dev()
     rows = data.load_dev_manifest(DEV_DIR, with_durations=False)
     assert len(rows) == 372
     for row in rows:
@@ -39,6 +102,7 @@ def test_scoring_space_is_a_fixed_point_on_real_references():
 
 
 def test_style_dimensions_are_worth_measurable_wer():
+    _require_dev()
     rows = data.load_dev_manifest(DEV_DIR, with_durations=False)
     ablation = scoring.style_loss_ablation(r["raw_text"] for r in rows)
     assert ablation["split reduplication hyphens"] > 0.05
@@ -80,7 +144,17 @@ def test_language_field_switches_the_declaration():
     assert prompts.STYLE_VOICE_NOTE in code_switched
 
 
+def test_nahuatl_language_field_selects_spanish_nahuatl_prose():
+    config = prompts.PromptConfig(prose="codeswitch_spnh")
+    mixed = prompts.build_context(config, language_field="nah")
+    spanish = prompts.build_context(config, language_field="spa")
+    assert "nahuatl" in mixed.lower()
+    assert "espanol" in spanish.lower()
+    assert "nahuatl" not in spanish.lower()
+
+
 def test_glossary_prefers_marked_spellings():
+    _require_dev()
     rows = data.load_dev_manifest(DEV_DIR, with_durations=False)
     glossary = prompts.mine_glossary([r["text"] for r in rows], max_terms=40)
     assert glossary
@@ -131,6 +205,7 @@ def test_rover_requires_a_majority_before_inserting():
 
 
 def test_length_prior_flags_truncation_and_loops():
+    _require_dev()
     rows = data.load_dev_manifest(DEV_DIR, with_durations=True)
     prior = combine.LengthPrior.fit(
         [r["text"] for r in rows], [r["duration"] for r in rows]
@@ -150,6 +225,7 @@ def test_length_prior_flags_truncation_and_loops():
 
 
 def test_lexicon_learns_dominant_forms_only():
+    _require_dev()
     rows = data.load_dev_manifest(DEV_DIR, with_durations=False)
     lexicon = postprocess.StyleLexicon.fit(r["text"] for r in rows)
     assert lexicon.casing.get("smp") == "SMP"
@@ -161,6 +237,7 @@ def test_lexicon_learns_dominant_forms_only():
 
 
 def test_rules_repair_the_style_damage_they_are_meant_to():
+    _require_dev()
     rows = data.load_dev_manifest(DEV_DIR, with_durations=False)
     lexicon = postprocess.StyleLexicon.fit(r["text"] for r in rows)
     pipeline = postprocess.RulePipeline(lexicon=lexicon)
@@ -199,6 +276,7 @@ def test_degenerate_repair_only_fires_on_impossible_speaking_rates():
 
 
 def test_rule_gate_rejects_rules_that_do_not_help():
+    _require_dev()
     rows = data.load_dev_manifest(DEV_DIR, with_durations=False)
     references = [r["text"] for r in rows]
     lexicon = postprocess.StyleLexicon.fit(references)
@@ -224,6 +302,7 @@ def test_rule_gate_rejects_rules_that_do_not_help():
 
 
 def test_grouped_folds_never_split_a_speaker():
+    _require_dev()
     rows = data.load_dev_manifest(DEV_DIR, with_durations=True)
     for _, train_idx, valid_idx in data.iter_grouped_cv(rows, n_folds=4):
         train_speakers = {rows[i]["speaker"] for i in train_idx}
@@ -233,11 +312,23 @@ def test_grouped_folds_never_split_a_speaker():
 
 
 def test_conversation_holdout_is_disjoint():
+    _require_dev()
     rows = data.load_dev_manifest(DEV_DIR, with_durations=False)
     train_idx, valid_idx = data.holdout_by_conversation(rows, held_out="2")
     assert len(train_idx) + len(valid_idx) == len(rows)
     assert {rows[i]["convo_id"] for i in valid_idx} == {"2"}
     assert "2" not in {rows[i]["convo_id"] for i in train_idx}
+
+
+def test_find_corpus_root_walks_a_nested_extract():
+    import tempfile
+
+    with tempfile.TemporaryDirectory() as tmp:
+        nested = Path(tmp) / "tetelancingo-nahuatl" / "clips"
+        nested.mkdir(parents=True)
+        (nested.parent / "metadata.tsv").write_text("audio_filename\ttranscript\n", encoding="utf-8")
+        found = data.find_corpus_root(tmp)
+        assert found == nested.parent
 
 
 def test_timestamp_parsing():
@@ -276,6 +367,8 @@ def _main() -> int:
             continue
         try:
             fn()
+        except Skip as exc:
+            print(f"skip {name}  ({exc})")
         except Exception:
             failures += 1
             print(f"FAIL {name}")

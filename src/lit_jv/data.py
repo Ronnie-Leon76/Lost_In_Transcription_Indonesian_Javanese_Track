@@ -27,6 +27,7 @@ from __future__ import annotations
 import csv
 import json
 import math
+import os
 import re
 from dataclasses import dataclass
 from pathlib import Path
@@ -83,8 +84,51 @@ def probe_duration(path: str | Path) -> float:
 # --------------------------------------------------------------------------
 
 
+def load_dotenv(path: str | Path | None = None) -> Path | None:
+    """Fill ``os.environ`` from a ``.env`` file without overwriting existing vars.
+
+    Already-exported values win, so a RunPod secret or a shell ``export`` still
+    overrides a file. Missing files are a no-op. Returns the path that was read,
+    or ``None``.
+    """
+    path = Path(path) if path is not None else Path(__file__).resolve().parents[2] / ".env"
+    if not path.is_file():
+        return None
+    for raw in path.read_text(encoding="utf-8").splitlines():
+        line = raw.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, _, value = line.partition("=")
+        key = key.strip()
+        if not key or key in os.environ:
+            continue
+        os.environ[key] = value.strip().strip('"').strip("'")
+    return path
+
+
+def resolve_dev_dir(explicit: str | Path | None = None) -> Path:
+    """Locate the development set.
+
+    Order: an explicit path, then ``LIT_DEV_DIR``, then ``<repo>/indonesian_dev``.
+    On a private repo the folder is tracked. Override this when it lives
+    somewhere other than ``<repo>/indonesian_dev``.
+    """
+    if explicit is not None:
+        return Path(explicit)
+    load_dotenv()
+    env = os.environ.get("LIT_DEV_DIR")
+    if env:
+        return Path(env)
+    return Path(__file__).resolve().parents[2] / "indonesian_dev"
+
+
+def dev_dir_ready(dev_dir: str | Path | None = None, metadata_name: str = "metadata.tsv") -> bool:
+    """True when ``metadata.tsv`` is present. Clips can be probed later."""
+    return (resolve_dev_dir(dev_dir) / metadata_name).is_file()
+
+
 def load_dev_manifest(
-    dev_dir: str | Path,
+    dev_dir: str | Path | None = None,
     metadata_name: str = "metadata.tsv",
     clips_dirname: str = "clips",
     with_durations: bool = True,
@@ -95,10 +139,19 @@ def load_dev_manifest(
     flag flip in :func:`build_training_manifest` switches the whole pipeline
     between raw-text and scoring-space supervision.
     """
-    dev_dir = Path(dev_dir)
+    dev_dir = resolve_dev_dir(dev_dir)
+    metadata = dev_dir / metadata_name
+    if not metadata.is_file():
+        raise FileNotFoundError(
+            f"development set not found at {metadata}. "
+            "The folder must contain metadata.tsv and clips/. "
+            "On a private repo it is tracked: git add indonesian_dev && git push, "
+            "then git pull on this machine. Or set LIT_DEV_DIR, or "
+            "source scripts/setup_env.sh after copying the folder."
+        )
     clips = dev_dir / clips_dirname
     rows: list[dict] = []
-    with open(dev_dir / metadata_name, encoding="utf-8", newline="") as f:
+    with open(metadata, encoding="utf-8", newline="") as f:
         for rec in csv.DictReader(f, delimiter="\t"):
             audio = clips / rec["audio_filename"]
             rows.append(
@@ -462,6 +515,47 @@ def load_flat_corpus(
             }
         )
     return rows
+
+
+def find_corpus_root(path: str | Path) -> Path:
+    """Locate ``metadata.tsv`` / ``clips/`` after a tarball extracts a nested folder."""
+    path = Path(path)
+    if (path / "metadata.tsv").is_file() or (path / "clips").is_dir():
+        return path
+    for meta in sorted(path.rglob("metadata.tsv")):
+        return meta.parent
+    for clips in sorted(path.rglob("clips")):
+        if clips.is_dir():
+            return clips.parent
+    return path
+
+
+def load_extracted_mdc_corpus(
+    root: str | Path,
+    *,
+    corpus: str = "mdc",
+    language: str = "nah",
+    style_tag: str | None = None,
+    weight: float = 1.0,
+) -> list[dict]:
+    """Load a Mozilla Data Collective clip corpus (Indonesian-Javanese or Nahuatl)."""
+    from .prompts import STYLE_VOICE_NOTE_SP_NH, STYLE_READ
+
+    root = find_corpus_root(root)
+    tag = style_tag or (
+        STYLE_VOICE_NOTE_SP_NH if language in {"nah", "nhe", "nci", "nahuatl", "spnh"} else STYLE_READ
+    )
+    meta = "metadata.tsv" if (root / "metadata.tsv").is_file() else "metadata.csv"
+    clips = "clips" if (root / "clips").is_dir() else "."
+    return load_flat_corpus(
+        root,
+        metadata_name=meta,
+        clips_dirname=clips,
+        style_tag=tag,
+        corpus=corpus,
+        language=language,
+        weight=weight,
+    )
 
 
 # --------------------------------------------------------------------------

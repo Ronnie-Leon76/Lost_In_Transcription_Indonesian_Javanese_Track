@@ -21,9 +21,27 @@ sys.path.insert(0, str(ROOT / "src"))
 
 from lit_jv import hub, repro  # noqa: E402
 from lit_jv import data as lit_data  # noqa: E402
+from lit_jv.decode import fit_vllm_gpu_memory_utilization, reclaim_qwen3_asr_transformers_classes  # noqa: E402
 from lit_jv.train_lora import LoraSpec, TrainSpec  # noqa: E402
 
-DEV_DIR = ROOT / "indonesian_dev"
+DEV_DIR = lit_data.resolve_dev_dir()
+
+
+class Skip(Exception):
+    """Optional local corpus is absent. Not a failure."""
+
+
+def _require_dev() -> None:
+    if not lit_data.dev_dir_ready(DEV_DIR):
+        raise Skip(
+            f"no development set at {DEV_DIR} "
+            "(copy indonesian_dev/ here, or set LIT_DEV_DIR)"
+        )
+
+
+def test_vllm_memory_fit_never_exceeds_the_requested_fraction():
+    assert fit_vllm_gpu_memory_utilization(0.85) <= 0.85
+    reclaim_qwen3_asr_transformers_classes()  # no-op without transformers/vllm
 
 
 def test_seeding_is_reproducible_across_processes():
@@ -52,6 +70,7 @@ def test_config_fingerprint_ignores_key_order_but_not_values():
 
 
 def test_manifest_fingerprint_tracks_content_not_order():
+    _require_dev()
     rows = lit_data.load_dev_manifest(DEV_DIR, with_durations=False)[:20]
     shuffled = list(rows)
     random.Random(0).shuffle(shuffled)
@@ -119,6 +138,47 @@ def test_model_card_documents_the_run():
     assert "HF_TOKEN" not in card
 
 
+def test_sanitize_generation_config_unsets_greedy_temperature():
+    from types import SimpleNamespace
+
+    from lit_jv.train_lora import sanitize_generation_config, write_generation_config
+
+    class FakeConfig(SimpleNamespace):
+        def validate(self, strict=False):
+            if not self.do_sample and self.temperature not in (None, 1.0):
+                raise ValueError("temperature set with do_sample=False")
+
+    dirty = FakeConfig(do_sample=False, temperature=1e-06, top_p=0.8, top_k=20)
+    clean = sanitize_generation_config(dirty)
+    assert clean.do_sample is False
+    assert clean.temperature is None
+    clean.validate(strict=True)
+
+    with tempfile.TemporaryDirectory() as tmp:
+        path = write_generation_config(tmp, clean)
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    assert payload["do_sample"] is False
+    assert "temperature" not in payload
+
+
+def test_hub_spec_from_env_is_none_without_a_repo():
+    import os
+
+    old = os.environ.get("LIT_HF_REPO")
+    try:
+        os.environ.pop("LIT_HF_REPO", None)
+        assert hub.HubSpec.from_env() is None
+        os.environ["LIT_HF_REPO"] = "me/lit-jv"
+        spec = hub.HubSpec.from_env()
+        assert spec is not None and spec.repo_id == "me/lit-jv"
+        assert spec.upload_merged is False
+    finally:
+        if old is None:
+            os.environ.pop("LIT_HF_REPO", None)
+        else:
+            os.environ["LIT_HF_REPO"] = old
+
+
 def test_hub_spec_reads_token_from_the_environment_only():
     import os
 
@@ -148,6 +208,21 @@ def test_resolve_checkpoint_returns_local_directories_untouched():
         assert hub.resolve_checkpoint(tmp) == Path(tmp)
 
 
+def test_manifest_dataset_does_not_import_datasets():
+    from lit_jv.train_lora import ManifestDataset, _as_hf_dataset
+
+    rows = [
+        {"audio_path": "a.mp3", "text": "aku", "duration": 2.0, "corpus": "dev"},
+        {"audio_path": "b.mp3", "text": "ora", "duration": 10.0, "corpus": "dev"},
+    ]
+    dataset = _as_hf_dataset(rows)
+    assert isinstance(dataset, ManifestDataset)
+    assert len(dataset) == 2
+    assert dataset[0]["text"] == "aku"
+    assert dataset.lengths[1] == 500
+    assert "audio_path" in dataset[1]
+
+
 def test_train_spec_exposes_metrics_and_hub_controls():
     spec = TrainSpec()
     assert spec.report_to == ("tensorboard",)
@@ -160,11 +235,22 @@ def test_train_spec_exposes_metrics_and_hub_controls():
 
 def run() -> int:
     tests = [(name, fn) for name, fn in sorted(globals().items()) if name.startswith("test_")]
+    failures = 0
     for name, fn in tests:
-        fn()
-        print(f"ok   {name}")
-    print(f"\n{len(tests)} tests passed")
-    return 0
+        try:
+            fn()
+        except Skip as exc:
+            print(f"skip {name}  ({exc})")
+        except Exception:
+            import traceback
+
+            failures += 1
+            print(f"FAIL {name}")
+            traceback.print_exc()
+        else:
+            print(f"ok   {name}")
+    print(f"\n{len(tests) - failures} tests passed" if not failures else f"\n{failures} failing test(s)")
+    return 1 if failures else 0
 
 
 if __name__ == "__main__":

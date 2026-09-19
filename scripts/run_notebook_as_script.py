@@ -56,6 +56,21 @@ def main() -> int:
     if args.write_only:
         return 0
 
+    sys.path.insert(0, str(ROOT / "src"))
+    from lit_jv.data import load_dotenv, resolve_dev_dir, dev_dir_ready
+
+    load_dotenv(ROOT / ".env")
+    dev_dir = resolve_dev_dir()
+    if not dev_dir_ready(dev_dir):
+        print(
+            f"development set not found at {dev_dir / 'metadata.tsv'}\n"
+            "Source the env script, then make sure indonesian_dev/ is on this machine:\n"
+            "  source scripts/setup_env.sh\n"
+            "On a private repo: git add indonesian_dev && git commit && git push, then git pull here.",
+            file=sys.stderr,
+        )
+        return 2
+
     try:
         import matplotlib
 
