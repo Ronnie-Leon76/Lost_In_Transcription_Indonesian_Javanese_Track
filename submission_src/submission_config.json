@@ -11,29 +11,10 @@
    "max_glossary_terms": 96,
    "force_language": "Indonesian",
    "temperature": 0.0
-  },
-  {
-   "name": "p2-style-noglossary",
-   "prose": "codeswitch_style",
-   "glossary": false,
-   "max_glossary_terms": 96,
-   "force_language": "Indonesian",
-   "temperature": 0.0
-  },
-  {
-   "name": "p3-verbatim-freelid",
-   "prose": "verbatim",
-   "glossary": true,
-   "max_glossary_terms": 96,
-   "force_language": null,
-   "temperature": 0.0
   }
  ],
- "combiner": "rover",
- "combiner_by_n": {
-  "2": "rover",
-  "3": "rover"
- },
+ "combiner": "none",
+ "combiner_by_n": {},
  "rover": {
   "null_penalty": 1.0,
   "insertion_threshold": 0.5

@@ -141,14 +141,14 @@ def generation_sequences(output):
 
 @dataclass
 class LoraSpec:
-    r: int = 32
-    alpha: int = 64
+    r: int = 16
+    alpha: int = 32
     dropout: float = 0.05
     #: Adapt the text decoder by default. The audio encoder is optional because
     #: it doubles the trainable parameters for a much smaller share of the gain
     #: on 12 hours of data — measure it before paying for it.
     adapt_text_decoder: bool = True
-    adapt_audio_encoder: bool = True
+    adapt_audio_encoder: bool = False
 
     def target_pattern(self) -> str:
         parts: list[str] = []
@@ -748,6 +748,12 @@ def _wer_callback_class():
             self._references = [row["text"] for row in self.rows]
             self._writer = None
             self._last_step = -1
+            # The Trainer's last step is not necessarily the best WER step.  Keep
+            # an in-memory CPU copy of the small LoRA state so the next stage (and
+            # the adapter ultimately saved) starts from the selected checkpoint.
+            # Copying the 1.7B base model would be prohibitive; PEFT's state dict
+            # contains adapters only.
+            self._best_adapter_state = None
 
         def _summary_writer(self, args):
             # Writing into the Trainer's own logging_dir means TensorBoard merges
@@ -790,6 +796,17 @@ def _wer_callback_class():
             self.history.append(entry)
             if self.best is None or wer < self.best["eval_wer"]:
                 self.best = entry
+                try:
+                    from peft import get_peft_model_state_dict
+
+                    self._best_adapter_state = {
+                        key: value.detach().cpu().clone()
+                        for key, value in get_peft_model_state_dict(model).items()
+                    }
+                except Exception as exc:
+                    # Retain the metric even if a future PEFT version changes its
+                    # helper API; training must not be interrupted by bookkeeping.
+                    self.log(f"  [wer] could not snapshot best adapter: {exc}")
             self.log(
                 f"  [wer] step {state.global_step} ({tag}) WER={wer:.4f} "
                 f"empty={empty} in {entry['seconds']:.0f}s"
@@ -806,6 +823,17 @@ def _wer_callback_class():
 
         def on_train_end(self, args, state, control, model=None, **kwargs):
             self._probe(args, state, model, "final")
+            if self._best_adapter_state is not None and model is not None:
+                try:
+                    from peft import set_peft_model_state_dict
+
+                    set_peft_model_state_dict(model, self._best_adapter_state)
+                    self.log(
+                        f"  [wer] restored best adapter from step {self.best['step']} "
+                        f"(WER={self.best['eval_wer']:.4f})"
+                    )
+                except Exception as exc:
+                    self.log(f"  [wer] could not restore best adapter: {exc}")
             if self._writer:
                 self._writer.close()
 
