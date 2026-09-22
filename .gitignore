@@ -19,10 +19,6 @@ spanish_english_dev/
 tetelancingo_nahuatl/
 
 # Downloaded competition data and official submission-format CSVs are local only.
-data/**
-!data/README.md
-!data/**/.gitkeep
-submission_formats/**/submission_format.csv
 *.tar.gz
 .env
 *.token
