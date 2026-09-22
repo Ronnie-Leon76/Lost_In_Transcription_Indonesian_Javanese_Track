@@ -229,6 +229,12 @@ class TrainSpec:
         ),
     )
     prompt: PromptConfig = field(default_factory=PromptConfig)
+    #: Assistant-side language label used in the supervised Qwen ASR target.
+    #: Keep this aligned with the track, rather than inheriting the historic
+    #: Indonesian-Javanese default from :mod:`lit_jv.prompts`.  Qwen supports
+    #: both Indonesian and Spanish, so Spanish-Nahuatl training must use
+    #: ``"Spanish"`` here even though many emitted words are Nahuatl.
+    target_language: str = DEFAULT_FORCE_LANGUAGE
     #: Keep the style tag in the training prompt. Turning this off is the
     #: ablation that shows what corpus conditioning is worth.
     use_style_tags: bool = True
@@ -299,7 +305,7 @@ def training_prompt(
         config, language_field=row.get("language"), style_tag=style_tag
     )
     prefix = render_chat_prompt(context, force_language=None)
-    target = render_target(row["text"], language=DEFAULT_FORCE_LANGUAGE)
+    target = render_target(row["text"], language=spec.target_language)
     return prefix, target
 
 
@@ -624,6 +630,19 @@ class _CastInputsTrainer:
                     return super()._get_train_sampler(*args, **kwargs)
                 except TypeError:
                     return super()._get_train_sampler()
+
+            def _get_eval_sampler(self, eval_dataset):
+                """Keep lazy audio manifests in deterministic order at evaluation.
+
+                ``group_by_length`` is useful for the training batches and is
+                handled above from the manifest's explicit ``lengths``.  Recent
+                Transformers versions also try to length-group evaluation and
+                assume each raw item already has ``input_ids``; ours only gains
+                those in the collator.  Evaluation must therefore be sequential.
+                """
+                from torch.utils.data import SequentialSampler
+
+                return SequentialSampler(eval_dataset)
 
         return CastFloatInputsTrainer
 
