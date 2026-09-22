@@ -7,6 +7,7 @@ matplotlib>=3.8
 mutagen>=1.47          # MP3 durations from headers, without decoding
 jupyterlab>=4.0
 huggingface_hub>=0.26  # publish checkpoints / pull them back before packaging
+datacollective>=0.5.5  # official Mozilla Data Collective download client
 tensorboard>=2.16      # read the event files written during GPU training
 
 # LoRA training is imported lazily by the notebook's GPU sections.

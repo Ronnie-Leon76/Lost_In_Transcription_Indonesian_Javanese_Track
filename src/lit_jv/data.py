@@ -109,9 +109,8 @@ def load_dotenv(path: str | Path | None = None) -> Path | None:
 def resolve_dev_dir(explicit: str | Path | None = None) -> Path:
     """Locate the development set.
 
-    Order: an explicit path, then ``LIT_DEV_DIR``, then ``<repo>/indonesian_dev``.
-    On a private repo the folder is tracked. Override this when it lives
-    somewhere other than ``<repo>/indonesian_dev``.
+    Order: an explicit path, then ``LIT_DEV_DIR``, then the canonical
+    ``<repo>/data/indonesian_javanese/development`` directory.
     """
     if explicit is not None:
         return Path(explicit)
@@ -119,7 +118,7 @@ def resolve_dev_dir(explicit: str | Path | None = None) -> Path:
     env = os.environ.get("LIT_DEV_DIR")
     if env:
         return Path(env)
-    return Path(__file__).resolve().parents[2] / "indonesian_dev"
+    return Path(__file__).resolve().parents[2] / "data" / "indonesian_javanese" / "development"
 
 
 def dev_dir_ready(dev_dir: str | Path | None = None, metadata_name: str = "metadata.tsv") -> bool:
@@ -133,7 +132,7 @@ def load_dev_manifest(
     clips_dirname: str = "clips",
     with_durations: bool = True,
 ) -> list[dict]:
-    """Read ``indonesian_dev/`` into manifest rows.
+    """Read the Indonesian–Javanese development directory into manifest rows.
 
     Targets are converted to scoring space here and nowhere else, so a single
     flag flip in :func:`build_training_manifest` switches the whole pipeline
@@ -145,9 +144,8 @@ def load_dev_manifest(
         raise FileNotFoundError(
             f"development set not found at {metadata}. "
             "The folder must contain metadata.tsv and clips/. "
-            "On a private repo it is tracked: git add indonesian_dev && git push, "
-            "then git pull on this machine. Or set LIT_DEV_DIR, or "
-            "source scripts/setup_env.sh after copying the folder."
+            "Set LIT_DEV_DIR, or place the data at "
+            "data/indonesian_javanese/development/."
         )
     clips = dev_dir / clips_dirname
     rows: list[dict] = []

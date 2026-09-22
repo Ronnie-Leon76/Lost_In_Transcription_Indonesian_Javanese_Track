@@ -102,6 +102,11 @@ def main() -> int:
         action="store_true",
         help="Do not delete the tarball after extract.",
     )
+    parser.add_argument(
+        "--check-only",
+        action="store_true",
+        help="Request a presigned URL, but never download or write an archive.",
+    )
     args = parser.parse_args()
 
     token = os.environ.get("MDC_API_KEY") or os.environ.get("LIT_MDC_API_KEY")
@@ -116,6 +121,12 @@ def main() -> int:
 
     archive = args.archive or args.out.with_suffix(".tar.gz")
     url = _request_download_url(args.id, token)
+    if args.check_only:
+        # A presigned URL is intentionally neither printed nor persisted: it is
+        # temporary capability data, not a diagnostic artifact.
+        print(f"MDC access check succeeded for dataset {args.id}; no download started.")
+        return 0
+
     _download(url, archive)
     _extract(archive, args.out)
     if not args.keep_archive and archive.exists():

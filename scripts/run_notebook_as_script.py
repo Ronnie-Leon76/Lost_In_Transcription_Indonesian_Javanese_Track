@@ -21,7 +21,7 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-NOTEBOOK = ROOT / "notebooks" / "lost_in_transcription_id_jv.ipynb"
+NOTEBOOK = ROOT / "indonesian_javanese" / "lost_in_transcription_id_jv.ipynb"
 
 
 def flatten(notebook_path: Path) -> str:
@@ -64,9 +64,9 @@ def main() -> int:
     if not dev_dir_ready(dev_dir):
         print(
             f"development set not found at {dev_dir / 'metadata.tsv'}\n"
-            "Source the env script, then make sure indonesian_dev/ is on this machine:\n"
+            "Source the env script, then make sure data/indonesian_javanese/development/ is on this machine:\n"
             "  source scripts/setup_env.sh\n"
-            "On a private repo: git add indonesian_dev && git commit && git push, then git pull here.",
+            "Or set LIT_DEV_DIR to the directory containing metadata.tsv and clips/.",
             file=sys.stderr,
         )
         return 2

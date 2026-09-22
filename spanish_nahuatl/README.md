@@ -5,16 +5,17 @@ run the Indonesian–Javanese notebook or package for this competition.
 
 ## Data
 
-1. Download the competition development data into `nahuatl_dev/` so it contains
+1. Download the competition development data into `data/spanish_nahuatl/development/` so it contains
    `metadata.tsv` and `clips/`.
 2. On RunPod, set `MDC_API_KEY` as a secret (never in a notebook or zip) and run:
 
    ```bash
-   python scripts/download_mdc_dataset.py --out /workspace/tetelancingo_nahuatl
+   python spanish_nahuatl/download_tetelancingo.py --download
    ```
 
-3. Open `spanish_nahuatl/runpod_cells.py` as notebook-style cells, set its two
-   directory paths, and run in order.
+3. Open `spanish_nahuatl/lost_in_transcription_sp_nh.ipynb`, set its two
+   directory paths, and run it in order. `runpod_cells.py` remains the
+   notebook-style source companion.
 
 The Tetelancingo loader trains on its `sentence` column. That is the normalized
 Nahuatl transcript; it deliberately does not train against the Spanish

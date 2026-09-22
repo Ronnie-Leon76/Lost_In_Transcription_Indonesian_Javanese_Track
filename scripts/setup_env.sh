@@ -90,9 +90,9 @@ _lit_default() {
 
 _lit_load_dotenv "$_LIT_ROOT/.env"
 
-_lit_default LIT_DEV_DIR "$_LIT_ROOT/indonesian_dev"
-_lit_default LIT_JEMBER "$_LIT_ROOT/jember"
-_lit_default LIT_NAHUATL_DIR "$_LIT_ROOT/nahuatl_dev"
+_lit_default LIT_DEV_DIR "$_LIT_ROOT/data/indonesian_javanese/development"
+_lit_default LIT_JEMBER "$_LIT_ROOT/data/indonesian_javanese/jember"
+_lit_default LIT_NAHUATL_DIR "$_LIT_ROOT/data/spanish_nahuatl/tetelancingo"
 _lit_default LIT_SEED 3407
 _lit_default LIT_DETERMINISTIC 0
 _lit_default LIT_MODEL "Qwen/Qwen3-ASR-1.7B"
@@ -127,16 +127,9 @@ echo "LIT_SKIP_DECODE/TRAIN $LIT_SKIP_DECODE / $LIT_SKIP_TRAIN"
 if [ ! -f "$_LIT_META" ]; then
   echo >&2
   echo "setup_env.sh: development set not found at $_LIT_META" >&2
-  echo "indonesian_dev/ must contain metadata.tsv and clips/." >&2
+  echo "data/indonesian_javanese/development/ must contain metadata.tsv and clips/." >&2
   echo >&2
-  echo "On a private repo the folder is meant to be tracked. From your laptop:" >&2
-  echo "  git add indonesian_dev" >&2
-  echo "  git commit -m \"Add development set\"" >&2
-  echo "  git push" >&2
-  echo "then on this box: git pull" >&2
-  echo >&2
-  echo "Or copy it once:" >&2
-  echo "  rsync -avP indonesian_dev/ <host>:$_LIT_ROOT/indonesian_dev/" >&2
+  echo "Copy or download the data to that path, or set LIT_DEV_DIR." >&2
   unset _LIT_ROOT _LIT_META _LIT_CLIPS
   unset -f _lit_is_set _lit_strip _lit_load_dotenv _lit_default
   return 1 2>/dev/null || exit 1

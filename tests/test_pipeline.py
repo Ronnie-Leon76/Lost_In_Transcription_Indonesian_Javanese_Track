@@ -28,7 +28,7 @@ def _require_dev() -> None:
     if not data.dev_dir_ready(DEV_DIR):
         raise Skip(
             f"no development set at {DEV_DIR} "
-            "(copy indonesian_dev/ here, or set LIT_DEV_DIR)"
+            "(stage data/indonesian_javanese/development/, or set LIT_DEV_DIR)"
         )
 
 
@@ -83,7 +83,7 @@ def test_resolve_dev_dir_honours_env_and_explicit_path():
         assert data.resolve_dev_dir() == Path("/tmp/lit-dev-from-env")
         assert data.resolve_dev_dir("/explicit") == Path("/explicit")
         os.environ.pop("LIT_DEV_DIR")
-        assert data.resolve_dev_dir().name == "indonesian_dev"
+        assert data.resolve_dev_dir() == ROOT / "data" / "indonesian_javanese" / "development"
     finally:
         if old is None:
             os.environ.pop("LIT_DEV_DIR", None)

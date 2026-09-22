@@ -60,6 +60,7 @@ STYLE_VOICE_NOTE = "wa-voicenote-id-jv"
 STYLE_JEMBER = "jember-session-jv"
 STYLE_READ = "read-tts"
 STYLE_VOICE_NOTE_SP_NH = "wa-voicenote-sp-nh"
+STYLE_VOICE_NOTE_SP_EN = "wa-voicenote-sp-en"
 
 
 def render_chat_prompt(context: str, force_language: str | None = DEFAULT_FORCE_LANGUAGE) -> str:
@@ -151,6 +152,12 @@ CONTEXT_PROSE: dict[str, str] = {
         "Escribe cada palabra en la ortografia de su idioma, no traduzcas. "
         "Copia disfluencias, cortes y pausas tal cual, incluso puntos suspensivos."
     ),
+    "codeswitch_spen": (
+        "Nota de voz de una conversacion informal entre hablantes bilingues. "
+        "Espanol e ingles se mezclan en la misma oracion. "
+        "Escribe cada palabra en la ortografia de su idioma, no traduzcas. "
+        "Copia disfluencias, cortes y pausas tal cual, incluso puntos suspensivos."
+    ),
     "monolingual_es": (
         "Nota de voz de una conversacion informal en espanol. "
         "Copia tal cual, incluyendo repeticiones, cortes y pausas."
@@ -166,6 +173,10 @@ _LANGUAGE_FIELD_TO_PROSE = {
     "nhe": "codeswitch_spnh",
     "nci": "codeswitch_spnh",
     "nahuatl": "codeswitch_spnh",
+    "spen": "codeswitch_spen",
+    "eng": "codeswitch_spen",
+    "en": "codeswitch_spen",
+    "english": "codeswitch_spen",
     "spa": "monolingual_es",
     "es": "monolingual_es",
     "spanish": "monolingual_es",
@@ -218,9 +229,10 @@ def build_context(
         "codeswitch",
         "codeswitch_style",
         "codeswitch_spnh",
+        "codeswitch_spen",
     ):
         mapped = _LANGUAGE_FIELD_TO_PROSE.get(str(language_field).strip().lower())
-        if mapped in ("monolingual_id", "monolingual_es", "codeswitch_spnh"):
+        if mapped in ("monolingual_id", "monolingual_es", "codeswitch_spnh", "codeswitch_spen"):
             prose_key = mapped
     parts: list[str] = []
     tag = style_tag if style_tag is not None else config.style_tag

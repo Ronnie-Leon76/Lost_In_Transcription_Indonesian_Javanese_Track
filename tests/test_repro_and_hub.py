@@ -36,7 +36,7 @@ def _require_dev() -> None:
     if not lit_data.dev_dir_ready(DEV_DIR):
         raise Skip(
             f"no development set at {DEV_DIR} "
-            "(copy indonesian_dev/ here, or set LIT_DEV_DIR)"
+            "(stage data/indonesian_javanese/development/, or set LIT_DEV_DIR)"
         )
 
 

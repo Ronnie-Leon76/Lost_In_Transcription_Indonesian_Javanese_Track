@@ -198,7 +198,7 @@ def run() -> int:
     if not lit_data.dev_dir_ready(DEV_DIR):
         print(
             f"skip submission dry run: no development set at {DEV_DIR}\n"
-            "copy indonesian_dev/ onto this machine, or set LIT_DEV_DIR"
+            "stage data/indonesian_javanese/development/, or set LIT_DEV_DIR"
         )
         return 0
     all_rows = lit_data.load_dev_manifest(DEV_DIR, with_durations=False)

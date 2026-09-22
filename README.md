@@ -6,7 +6,7 @@ and glossary conditioning, a confidence-triggered re-decode ladder, multi-pass s
 combination, and orthography repair rules that are each gated on held-out WER.
 
 The reasoning, measurements and ablations live in
-[`notebooks/lost_in_transcription_id_jv.ipynb`](notebooks/lost_in_transcription_id_jv.ipynb).
+[`indonesian_javanese/lost_in_transcription_id_jv.ipynb`](indonesian_javanese/lost_in_transcription_id_jv.ipynb).
 Start there. This file covers layout and mechanics.
 
 ## The short version
@@ -124,7 +124,7 @@ cannot upgrade it normally.
 
 ```bash
 # 1. analysis, targets, prompts, zero-shot baseline, rule fitting  (the notebook)
-jupyter lab notebooks/lost_in_transcription_id_jv.ipynb
+jupyter lab indonesian_javanese/lost_in_transcription_id_jv.ipynb
 
 # 2. package and verify (--model also accepts a Hub repo id; it is downloaded first,
 #    because the container has no network and the weights must be inside the archive)
