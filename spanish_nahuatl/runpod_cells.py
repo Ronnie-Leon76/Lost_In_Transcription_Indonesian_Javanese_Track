@@ -5,13 +5,47 @@
 # the extracted Tetelancingo dataset.  Neither directory belongs in the final
 # submission archive.
 
+# %% [markdown]
+# ## 0. RunPod setup (run first on a GPU pod)
+#
+# This installs the complete, compatible environment for Qwen3-ASR, LoRA
+# training, packaging, and Hugging Face publication.  Run it on a fresh Python
+# 3.12 CUDA pod.  It deliberately runs outside the final competition archive.
+
+# %%
+from pathlib import Path
+import os
+import subprocess
+import sys
+
+ROOT = Path("/workspace/Lost_In_Transcription_Indonesian_Javanese_Track")
+if not ROOT.is_dir():
+    raise FileNotFoundError(f"Update ROOT for this pod: {ROOT}")
+
+# RunPod's base image can contain a Debian-managed Blinker without pip metadata.
+# Repair that narrow case before resolving qwen-asr's optional Gradio dependency.
+subprocess.run(
+    [sys.executable, "-m", "pip", "install", "--upgrade", "--ignore-installed", "blinker"],
+    check=True,
+)
+subprocess.run(
+    [
+        sys.executable, "-m", "pip", "install", "--upgrade", "--upgrade-strategy", "eager",
+        "-r", str(ROOT / "requirements-runpod.txt"),
+    ],
+    check=True,
+)
+subprocess.run([sys.executable, str(ROOT / "scripts" / "verify_runpod.py")], check=True)
+print("RunPod environment verified. Restart the kernel if pip upgraded an imported package.")
+
 # %%
 from pathlib import Path
 import sys
 
-ROOT = Path("/workspace/Lost_In_Transcription_Indonesian_Javanese_Track")
-sys.path.insert(0, str(ROOT / "src"))
-sys.path.insert(0, str(ROOT))
+if str(ROOT / "src") not in sys.path:
+    sys.path.insert(0, str(ROOT / "src"))
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
 
 from spanish_nahuatl import prepare
 from lit_jv import prompts
@@ -124,5 +158,74 @@ final_merged = merge_and_save(final_spec, ARTIFACTS / "final-lora" / "final", AR
 print(final_merged)
 
 # %%
-# In a terminal (not the competition container):
-# python spanish_nahuatl/package_submission.py --model artifacts/spnh/final-merged --glossary artifacts/spnh/glossary.json
+# Package only after the final all-data merge, so the ZIP and separately-published
+# model/ directory always describe the same weights.
+package = subprocess.run(
+    [
+        sys.executable,
+        str(ROOT / "spanish_nahuatl" / "package_submission.py"),
+        "--model", str(final_merged),
+        "--glossary", str(ARTIFACTS / "glossary.json"),
+    ],
+    check=True,
+    capture_output=True,
+    text=True,
+)
+print(package.stdout)
+SUBMISSION_ZIP = ARTIFACTS / "submission.zip"
+assert SUBMISSION_ZIP.is_file() and SUBMISSION_ZIP.stat().st_size > 0
+print(f"Ready to publish: {final_merged} and {SUBMISSION_ZIP}")
+
+# %% [markdown]
+# ## Publish the final weights and submission archive to Hugging Face
+#
+# Set `SPNH_HF_REPO` to an existing or new `owner/repository` name to control
+# the destination. If omitted, this cell creates a repository under the signed-
+# in Hugging Face account. `HF_TOKEN` is requested privately when it is not
+# already a RunPod secret; it is never written to the ZIP, model, or notebook.
+
+# %%
+from getpass import getpass
+from huggingface_hub import HfApi, hf_hub_url
+
+if not os.environ.get("HF_TOKEN"):
+    os.environ["HF_TOKEN"] = getpass("Hugging Face write token (not saved): ")
+if not os.environ["HF_TOKEN"].strip():
+    raise RuntimeError("HF_TOKEN is required to publish the model and submission archive")
+
+api = HfApi(token=os.environ["HF_TOKEN"])
+account = api.whoami()["name"]
+REPO_ID = os.environ.get("SPNH_HF_REPO", f"{account}/lost-in-transcription-spanish-nahuatl")
+PRIVATE = os.environ.get("SPNH_HF_PRIVATE", "0") == "1"
+
+api.create_repo(repo_id=REPO_ID, repo_type="model", private=PRIVATE, exist_ok=True)
+
+# `final-merged` is uploaded as model/ so users can download just the weights;
+# submission.zip remains at the repository root, ready for competition upload.
+model_commit = api.upload_folder(
+    repo_id=REPO_ID,
+    repo_type="model",
+    folder_path=str(final_merged),
+    path_in_repo="model",
+    commit_message="Upload final Spanish-Nahuatl merged model weights",
+    ignore_patterns=["**/__pycache__/**", "*.lock"],
+)
+archive_commit = api.upload_file(
+    path_or_fileobj=str(SUBMISSION_ZIP),
+    path_in_repo="submission.zip",
+    repo_id=REPO_ID,
+    repo_type="model",
+    commit_message="Upload Spanish-Nahuatl competition submission archive",
+)
+api.upload_file(
+    path_or_fileobj=str(ARTIFACTS / "glossary.json"),
+    path_in_repo="assets/glossary.json",
+    repo_id=REPO_ID,
+    repo_type="model",
+    commit_message="Upload final glossary provenance",
+)
+
+print("Model weights:", getattr(model_commit, "commit_url", model_commit))
+print("Submission archive:", getattr(archive_commit, "commit_url", archive_commit))
+print("Repository:", f"https://huggingface.co/{REPO_ID}")
+print("Archive download:", hf_hub_url(repo_id=REPO_ID, filename="submission.zip", repo_type="model"))
