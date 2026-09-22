@@ -57,6 +57,8 @@ SPNH_DEV_DIR = Path("/workspace/nahuatl_dev")       # metadata.tsv + clips/
 TETEL_DIR = Path("/workspace/tetelancingo_nahuatl") # extracted MDC archive
 ARTIFACTS = ROOT / "artifacts" / "spnh"
 ARTIFACTS.mkdir(parents=True, exist_ok=True)
+TENSORBOARD_ROOT = ARTIFACTS / "tensorboard"
+TENSORBOARD_ROOT.mkdir(parents=True, exist_ok=True)
 
 # %%
 # Fit rows and WER selection rows are disjoint by speaker and conversation.
@@ -125,6 +127,10 @@ spec = TrainSpec(
     wer_eval_steps=10,
     wer_eval_clips=len(dev_eval),
     wer_eval_batch_size=4,
+    # Transformers writes loss and learning rate here; the WER callback writes
+    # eval/wer and eval/empty_outputs into the very same stage event files.
+    tensorboard_dir=str(TENSORBOARD_ROOT / "selection"),
+    report_to=("tensorboard",),
     run_name="spnh-qwen3asr",
 )
 stages = (
@@ -153,6 +159,10 @@ assert selected_dev.wer < baseline.wer, "reject: selected adapter did not beat z
 # all tuning decisions are already frozen above.
 final_rows = prepare.load_tetelancingo(TETEL_DIR, split=None) + dev_rows
 final_spec = TrainSpec(**{**spec.__dict__, "output_dir": str(ARTIFACTS / "final-lora"), "wer_eval_steps": 0})
+final_spec = TrainSpec(**{
+    **final_spec.__dict__,
+    "tensorboard_dir": str(TENSORBOARD_ROOT / "final"),
+})
 final = train(final_rows, final_spec, stages=stages, save_adapter_as="final", eval_rows=None)
 final_merged = merge_and_save(final_spec, ARTIFACTS / "final-lora" / "final", ARTIFACTS / "final-merged")
 print(final_merged)
@@ -175,6 +185,31 @@ print(package.stdout)
 SUBMISSION_ZIP = ARTIFACTS / "submission.zip"
 assert SUBMISSION_ZIP.is_file() and SUBMISSION_ZIP.stat().st_size > 0
 print(f"Ready to publish: {final_merged} and {SUBMISSION_ZIP}")
+
+# %% [markdown]
+# ## Inspect the training curves
+#
+# TensorBoard's Scalars tab contains loss, learning rate, and—under the
+# selection run—`eval/wer` and `eval/empty_outputs`. In Jupyter, run the two
+# magic commands below in a new cell after training:
+#
+#     %load_ext tensorboard
+#     %tensorboard --logdir /workspace/.../artifacts/spnh/tensorboard
+#
+# The event files are checked before publication and uploaded into `runs/` in
+# the same Hub repository as the final weights and ZIP.
+
+# %%
+event_files = sorted(TENSORBOARD_ROOT.rglob("events.out.tfevents.*"))
+if not event_files:
+    raise RuntimeError(
+        f"No TensorBoard event files found under {TENSORBOARD_ROOT}. "
+        "Confirm the RunPod setup cell completed and that report_to includes tensorboard."
+    )
+print(f"TensorBoard log root: {TENSORBOARD_ROOT}")
+print("Event files:", len(event_files))
+for path in event_files:
+    print(" -", path.relative_to(TENSORBOARD_ROOT))
 
 # %% [markdown]
 # ## Publish the final weights and submission archive to Hugging Face
@@ -224,8 +259,16 @@ api.upload_file(
     repo_type="model",
     commit_message="Upload final glossary provenance",
 )
+metrics_commit = api.upload_folder(
+    repo_id=REPO_ID,
+    repo_type="model",
+    folder_path=str(TENSORBOARD_ROOT),
+    path_in_repo="runs",
+    commit_message="Upload TensorBoard training curves",
+)
 
 print("Model weights:", getattr(model_commit, "commit_url", model_commit))
 print("Submission archive:", getattr(archive_commit, "commit_url", archive_commit))
+print("TensorBoard event files:", getattr(metrics_commit, "commit_url", metrics_commit))
 print("Repository:", f"https://huggingface.co/{REPO_ID}")
 print("Archive download:", hf_hub_url(repo_id=REPO_ID, filename="submission.zip", repo_type="model"))
