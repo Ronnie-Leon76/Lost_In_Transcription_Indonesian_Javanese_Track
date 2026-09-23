@@ -1,0 +1,24 @@
+# Local, CPU-only development: the notebook's analysis sections, the test suite and
+# packaging. The GPU work must use the competition runtime instead (see README), because
+# the container pins exact versions of torch / transformers / vllm / qwen-asr.
+jiwer>=3.0
+pandas>=2.0
+matplotlib>=3.8
+mutagen>=1.47          # MP3 durations from headers, without decoding
+jupyterlab>=4.0
+huggingface_hub>=0.26  # publish checkpoints / pull them back before packaging
+datacollective>=0.5.5  # official Mozilla Data Collective download client
+tensorboard>=2.16      # read the event files written during GPU training
+
+# LoRA training is imported lazily by the notebook's GPU sections.
+peft==0.20.0
+datasets
+
+# Do not separately pin torch, CUDA wheels, transformers, or vLLM here. Qwen's
+# own extra is the compatibility contract: qwen-asr 0.0.6 pins transformers
+# 4.57.6 and vLLM 0.14.0.  Let pip select the CUDA-compatible torch wheel for
+# the pod instead of mixing a torch wheel from one CUDA release with a vLLM
+# wheel from another.
+qwen-asr[vllm]==0.0.6
+huggingface_hub[hf_transfer]>=0.26
+
