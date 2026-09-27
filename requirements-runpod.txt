@@ -2,10 +2,10 @@
 # inference, packaging, and the CPU-side test suite.
 #
 # Install this into a fresh Python 3.12 CUDA pod with:
-#   python -m pip install --upgrade --ignore-installed blinker
-#   python -m pip install --upgrade --upgrade-strategy eager -r requirements-runpod.txt
-# The first command works around Debian's package-managed Blinker missing a pip
-# RECORD file; it must run before the resolver reaches qwen-asr -> gradio.
+#   python scripts/install_runpod.py
+# It runs `pip install --upgrade --upgrade-strategy eager -r requirements-runpod.txt`
+# and repairs apt-managed packages without a pip RECORD file (blinker, pyparsing, ...)
+# that would otherwise abort the eager upgrade with `uninstall-no-record-file`.
 #
 # The CPU-side notebook dependencies are intentionally shared with local work.
 -r requirements-dev.txt

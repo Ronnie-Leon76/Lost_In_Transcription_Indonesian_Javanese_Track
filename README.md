@@ -106,9 +106,7 @@ the submitted archive. For a Runpod GPU pod, create a fresh **Python 3.12** envi
 and install the repository's complete notebook environment before training or decoding:
 
 ```bash
-python -m pip install --upgrade --ignore-installed blinker
-python -m pip install --upgrade --upgrade-strategy eager -r requirements-runpod.txt
-python scripts/verify_runpod.py
+python scripts/install_runpod.py
 ```
 
 This deliberately pins `qwen-asr==0.0.6`, whose published compatibility set pins
@@ -116,9 +114,12 @@ This deliberately pins `qwen-asr==0.0.6`, whose published compatibility set pins
 wheel: that is the usual source of Runpod ABI mismatches, and pip must select a build
 compatible with the pod's driver. `verify_runpod.py` fails before a costly run if the
 resolved versions, imports, or CUDA access are wrong. The official Qwen package metadata
-is the source of truth for these pins. The first command is intentional: some Runpod Debian
-images ship `blinker` without pip's `RECORD` metadata, and Qwen-ASR's Gradio dependency then
-cannot upgrade it normally.
+is the source of truth for these pins. The installer runs
+`pip install --upgrade --upgrade-strategy eager -r requirements-runpod.txt` and then
+`scripts/verify_runpod.py`. Runpod's Debian images ship some packages (`blinker`,
+`pyparsing`, ...) through apt without pip's `RECORD` metadata, so an eager upgrade fails
+with `uninstall-no-record-file`; the installer overlays a pip-managed copy of each package
+pip names (`--ignore-installed --no-deps`) and retries.
 
 ## Workflow
 

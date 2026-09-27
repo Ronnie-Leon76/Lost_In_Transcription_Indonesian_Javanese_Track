@@ -22,20 +22,9 @@ ROOT = Path("/workspace/Lost_In_Transcription_Indonesian_Javanese_Track")
 if not ROOT.is_dir():
     raise FileNotFoundError(f"Update ROOT for this pod: {ROOT}")
 
-# RunPod's base image can contain a Debian-managed Blinker without pip metadata.
-# Repair that narrow case before resolving qwen-asr's optional Gradio dependency.
-subprocess.run(
-    [sys.executable, "-m", "pip", "install", "--upgrade", "--ignore-installed", "blinker"],
-    check=True,
-)
-subprocess.run(
-    [
-        sys.executable, "-m", "pip", "install", "--upgrade", "--upgrade-strategy", "eager",
-        "-r", str(ROOT / "requirements-runpod.txt"),
-    ],
-    check=True,
-)
-subprocess.run([sys.executable, str(ROOT / "scripts" / "verify_runpod.py")], check=True)
+# Installs requirements-runpod.txt, repairing any apt-managed package without a pip
+# RECORD file (blinker, pyparsing, ...), then runs scripts/verify_runpod.py.
+subprocess.run([sys.executable, str(ROOT / "scripts" / "install_runpod.py")], check=True)
 print("RunPod environment verified. Restart the kernel if pip upgraded an imported package.")
 
 # %%
