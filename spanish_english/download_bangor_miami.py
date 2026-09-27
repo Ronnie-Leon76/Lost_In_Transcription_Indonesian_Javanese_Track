@@ -32,18 +32,22 @@ def main() -> int:
         from datacollective import download_dataset, get_dataset_details
     except ImportError as exc:
         raise SystemExit("Install the official SDK: pip install 'datacollective>=0.5.5'") from exc
+    target = args.out.resolve()
+    if target.is_dir() and any(not p.name.startswith(".") for p in target.iterdir()):
+        print(f"Bangor Miami already staged at {target}; nothing to do.")
+        return 0
     if args.check_only:
         get_dataset_details(BANGOR_MIAMI_DATASET_ID)
         print("MDC SDK metadata check succeeded; no download was started.")
         return 0
     downloaded = Path(download_dataset(BANGOR_MIAMI_DATASET_ID, enable_logging=True)).resolve()
-    target = args.out.resolve()
     target.parent.mkdir(parents=True, exist_ok=True)
     if downloaded != target:
-        if target.exists() and any(target.iterdir()):
-            raise SystemExit(f"destination is not empty: {target}")
         if target.exists():
-            target.rmdir()
+            # Placeholders such as .gitkeep do not count as a staged corpus.
+            if any(not p.name.startswith(".") for p in target.iterdir()):
+                raise SystemExit(f"destination is not empty: {target}")
+            shutil.rmtree(target)
         shutil.move(str(downloaded), str(target))
     print(f"Bangor Miami ready: {target}")
     return 0

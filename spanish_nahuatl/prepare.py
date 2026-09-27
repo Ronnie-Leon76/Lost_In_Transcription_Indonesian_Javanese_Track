@@ -18,7 +18,7 @@ from collections import Counter
 from pathlib import Path
 from typing import Iterable
 
-from lit_jv.data import probe_duration
+from lit_jv.data import extract_archives, probe_duration
 from lit_jv.prompts import STYLE_VOICE_NOTE_SP_NH
 from lit_jv.scoring import to_scoring_space
 
@@ -79,7 +79,7 @@ def load_tetelancingo(root: str | Path, split: str | None = "train") -> list[dic
     split for an external sanity check; do not tune repeatedly on it.  Pass
     ``None`` only after model selection when making the final training manifest.
     """
-    root = Path(root)
+    root = extract_archives(root)
     table = _find_table(root, {"audio_file", "sentence"})
     # Index once. Calling ``rglob`` for every row turns a 2,681-clip dataset
     # into millions of directory visits on a network-mounted RunPod volume.
@@ -169,6 +169,12 @@ def holdout_speakers(rows: Iterable[dict], count: int = 1, seed: int = 2026) -> 
         row for row in rows
         if str(row.get("speaker") or "") not in held and row.get("convo_id") not in held_convos
     ]
+    if not train_rows:
+        # Only reachable if every remaining speaker shares a held-out
+        # conversation; stay speaker-disjoint rather than fail.
+        print(f"[holdout_speakers] every speaker shares a held-out conversation; "
+              f"falling back to a speaker-only split (held speakers: {sorted(held)})")
+        train_rows = [row for row in rows if str(row.get("speaker") or "") not in held]
     if not train_rows or not eval_rows:
         raise ValueError("speaker-disjoint split unexpectedly produced an empty partition")
     return train_rows, eval_rows

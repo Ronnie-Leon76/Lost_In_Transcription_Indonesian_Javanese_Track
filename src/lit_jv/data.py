@@ -515,6 +515,78 @@ def load_flat_corpus(
     return rows
 
 
+def extract_archives(root: str | Path) -> Path:
+    """Unpack MDC SDK downloads in place and return the directory to read.
+
+    ``datacollective.download_dataset`` returns the path of an archive rather
+    than an extracted tree, and the download scripts move that path to the
+    track's data folder. Handle ``root`` itself being the archive and ``root``
+    holding archives, detected by content because MDC files may carry no
+    extension, including archives nested inside archives. Each unpacked archive
+    is recorded in ``.extracted`` so repeat calls do no work.
+    """
+    import shutil
+    import tarfile
+    import zipfile
+
+    root = Path(root)
+    skip = {".wav", ".mp3", ".flac", ".m4a", ".ogg", ".cha", ".tsv", ".csv", ".txt", ".json", ".jsonl", ".md", ".xml",
+            ".docx", ".xlsx", ".pptx", ".odt", ".ods", ".epub", ".jar", ".pdf"}  # zip-based documents, not archives
+
+    def is_archive(path: Path) -> bool:
+        if not path.is_file() or path.suffix.lower() in skip:
+            return False
+        try:
+            return zipfile.is_zipfile(path) or tarfile.is_tarfile(path)
+        except OSError:
+            return False
+
+    def unpack(archive: Path, dest: Path) -> None:
+        dest.mkdir(parents=True, exist_ok=True)
+        if zipfile.is_zipfile(archive):
+            with zipfile.ZipFile(archive) as zf:
+                zf.extractall(dest)
+            return
+        with tarfile.open(archive) as tf:
+            if hasattr(tarfile, "data_filter"):
+                tf.extractall(dest, filter="data")
+            else:
+                tf.extractall(dest)
+
+    marker = root / ".extracted"
+    if is_archive(root):
+        archive = root.with_name(root.name + ".archive")
+        shutil.move(str(root), str(archive))
+        unpack(archive, root)
+        marker.write_text(f"../{archive.name}\n", encoding="utf-8")
+    if not root.is_dir():
+        return root
+
+    done = set(marker.read_text(encoding="utf-8").split("\n")) if marker.is_file() else set()
+    while True:
+        pending = [
+            p for p in sorted(root.rglob("*"))
+            if p.name != marker.name and str(p.relative_to(root)) not in done and is_archive(p)
+        ]
+        if not pending:
+            return root
+        for archive in pending:
+            print(f"[extract_archives] unpacking {archive.relative_to(root)}")
+            unpack(archive, archive.parent)
+            done.add(str(archive.relative_to(root)))
+        marker.write_text("\n".join(sorted(done)) + "\n", encoding="utf-8")
+
+
+def describe_tree(root: str | Path, limit: int = 25) -> str:
+    """Short listing of files under ``root`` (name and size) for error messages."""
+    root = Path(root)
+    files = sorted(p for p in root.rglob("*") if p.is_file())
+    lines = [f"{p.relative_to(root)} ({p.stat().st_size:,} B)" for p in files[:limit]]
+    if len(files) > limit:
+        lines.append(f"... and {len(files) - limit} more")
+    return "\n  ".join(lines) or "(empty)"
+
+
 def find_corpus_root(path: str | Path) -> Path:
     """Locate ``metadata.tsv`` / ``clips/`` after a tarball extracts a nested folder."""
     path = Path(path)

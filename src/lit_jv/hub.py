@@ -72,6 +72,14 @@ class HubSpec:
         "lora",
         "qwen3-asr",
     )
+    #: Model-card metadata. Defaults describe the Indonesian-Javanese track; the
+    #: Spanish-English and Spanish-Nahuatl notebooks override them.
+    languages: tuple[str, ...] = ("id", "jv")
+    summary: str = (
+        "code-switched Indonesian-Javanese conversational speech, trained for the "
+        "[Lost in Transcription](https://competitions.mozilladatacollective.com/competitions/1/lost-in-transcription-in-jv/) "
+        "Indonesian-Javanese track"
+    )
     ignore_patterns: tuple[str, ...] = DEFAULT_IGNORE
     #: Uploading a merged 1.7B checkpoint is minutes of bandwidth. Off by default
     #: so an accidental cell run does not start one.
@@ -196,7 +204,7 @@ def render_model_card(
         "license": spec.license,
         "base_model": spec.base_model,
         "tags": list(spec.tags),
-        "language": ["id", "jv"],
+        "language": list(spec.languages),
         "library_name": "peft",
         "pipeline_tag": "automatic-speech-recognition",
     }
@@ -214,9 +222,7 @@ def render_model_card(
     lines.append(
         "LoRA adaptation of "
         f"[{spec.base_model}](https://huggingface.co/{spec.base_model}) for "
-        "code-switched Indonesian-Javanese conversational speech, trained for the "
-        "[Lost in Transcription](https://competitions.mozilladatacollective.com/competitions/1/lost-in-transcription-in-jv/) "
-        "Indonesian-Javanese track."
+        f"{spec.summary}."
     )
     lines.append("")
 
@@ -235,9 +241,9 @@ def render_model_card(
         lines.append("")
         lines.append(
             "WER is computed with the competition's own normaliser "
-            "(`lit_jv.scoring`, a verbatim port of `score.py`) on a held-out "
-            "conversation: the development set shares no speaker or conversation "
-            "with the test set, so a random split would overstate every row."
+            "(`lit_jv.scoring`, a verbatim port of `score.py`) on held-out "
+            "development speakers: the test set shares no speaker or conversation "
+            "with the development set, so a random split would overstate every row."
         )
         lines.append("")
 
